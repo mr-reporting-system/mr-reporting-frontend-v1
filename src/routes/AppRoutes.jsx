@@ -1,74 +1,118 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-import ProtectedRoute from '../components/ProtectedRoute';
+import { Suspense, createElement, lazy } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import ProtectedRoute from "../components/ProtectedRoute";
 
-// Public Pages
-import Home from "../pages/Home";
-import Login from "../pages/Login";
-import Services from "../pages/Services";
-import About from "../pages/About";
-import Contact from "../pages/Contact";
+const Home = lazy(() => import("../pages/Home"));
+const Login = lazy(() => import("../pages/Login"));
+const Services = lazy(() => import("../pages/Services"));
+const About = lazy(() => import("../pages/About"));
+const Contact = lazy(() => import("../pages/Contact"));
 
-// Admin Layout & Pages
-import AdminLayout from "../layouts/AdminLayout";
-import AdminDashboard from "../pages/admin/AdminDashboard"; 
-import DesignationCreation from "../pages/admin/masters/DesignationCreation";
-import UserCreation from '../pages/admin/masters/UserCreation';
-import AreaCreation from "../pages/admin/masters/AreaCreation";
-import DoctorChemistCreation from "../pages/admin/masters/DoctorChemistCreation";
-import HeadquarterMapping from "../pages/admin/masters/HeadquarterMapping";
-import ChangeHeadquarter from "../pages/admin/masters/ChangeHeadquarter";
-import MasterDataTransfer from "../pages/admin/masters/MasterDataTransfer";
-import HierarchyManagement from '../pages/admin/masters/HierarchyManagement';
-import STPCreation from '../pages/admin/masters/STPCreation';
-import ProductCreation from "../pages/admin/masters/ProductCreation";
-import CRMDoctorMapping from "../pages/admin/masters/CRMDoctorMapping";
+const AdminLayout = lazy(() => import("../layouts/AdminLayout"));
+const AdminDashboard = lazy(() => import("../pages/admin/AdminDashboard"));
 
-import MasterData from "../pages/admin/approvals/MasterData";
-import ApproveTourProgram from "../pages/admin/approvals/ApproveTourProgram";
-import STPApprove from "../pages/admin/approvals/STPApprove";
+const DesignationCreation = lazy(() => import("../pages/admin/masters/DesignationCreation"));
+const UserDirectory = lazy(() => import("../pages/admin/masters/UserDirectory"));
+const UserCreation = lazy(() => import("../pages/admin/masters/UserCreation"));
+const AreaCreation = lazy(() => import("../pages/admin/masters/AreaCreation"));
+const DoctorChemistCreation = lazy(() => import("../pages/admin/masters/DoctorChemistCreation"));
+const HeadquarterMapping = lazy(() => import("../pages/admin/masters/HeadquarterMapping"));
+const ChangeHeadquarter = lazy(() => import("../pages/admin/masters/ChangeHeadquarter"));
+const MasterDataTransfer = lazy(() => import("../pages/admin/masters/MasterDataTransfer"));
+const HierarchyManagement = lazy(() => import("../pages/admin/masters/HierarchyManagement"));
+const STPCreation = lazy(() => import("../pages/admin/masters/STPCreation"));
+const ProductCreation = lazy(() => import("../pages/admin/masters/ProductCreation"));
+const CRMDoctorMapping = lazy(() => import("../pages/admin/masters/CRMDoctorMapping"));
 
+const MasterData = lazy(() => import("../pages/admin/approvals/MasterData"));
+const ApproveTourProgram = lazy(() => import("../pages/admin/approvals/ApproveTourProgram"));
+const STPApprove = lazy(() => import("../pages/admin/approvals/STPApprove"));
+
+const FareRateCard = lazy(() => import("../pages/admin/expenses/FareRateCard"));
+const StateWiseDA = lazy(() => import("../pages/admin/expenses/StateWiseDA"));
+
+const SSSSubmitModify = lazy(() => import("../pages/admin/stock-statement/SSSSubmitModify"));
+const SSSView = lazy(() => import("../pages/admin/stock-statement/SSSView"));
+const UserStockistMapping = lazy(() => import("../pages/admin/stock-statement/UserStockistMapping"));
+const StockistMappingDeletionReport = lazy(() => import("../pages/admin/stock-statement/StockistMappingDeletionReport"));
+
+const TargetSubmission = lazy(() => import("../pages/admin/targets/TargetSubmission"));
+const TargetModify = lazy(() => import("../pages/admin/targets/TargetModify"));
+const TargetView = lazy(() => import("../pages/admin/targets/TargetView"));
+
+
+function RouteLoader() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center text-sm font-medium text-slate-500">
+      Loading module...
+    </div>
+  );
+}
+
+function withSuspense(Component) {
+  return (
+    <Suspense fallback={<RouteLoader />}>
+      {createElement(Component)}
+    </Suspense>
+  );
+}
 
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public Routes */}
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/services" element={<Services />} />
-      <Route path="/about" element={<About />} />
-      <Route path="/contact" element={<Contact />} />
+      <Route path="/" element={withSuspense(Home)} />
+      <Route path="/login" element={withSuspense(Login)} />
+      <Route path="/services" element={withSuspense(Services)} />
+      <Route path="/about" element={withSuspense(About)} />
+      <Route path="/contact" element={withSuspense(Contact)} />
 
-      {/* Private Routes */}
-      <Route element={<ProtectedRoute />}>
-        {/* 🛣️ Admin Section (Protected/Layout Routes) */}
-        <Route path="/admin" element={<AdminLayout />}>
-
-          {/* 🧭 Default route redirects /admin to /admin/dashboard */}
+      <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
+        <Route path="/admin" element={withSuspense(AdminLayout)}>
           <Route index element={<Navigate to="dashboard" replace />} />
 
-          {/* The Dashboard loads inside the Layout's <Outlet /> */}
-          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="dashboard" element={withSuspense(AdminDashboard)} />
 
-          <Route path="masters/designation" element={<DesignationCreation />} />
-          <Route path="masters/users" element={<UserCreation />} />
-          <Route path="masters/areas" element={<AreaCreation />} />
-          <Route path="masters/doctors" element={<DoctorChemistCreation />} />
-          <Route path="masters/headquarter-mapping" element={<HeadquarterMapping />} />
-          <Route path="masters/change-headquarter" element={<ChangeHeadquarter />} />
-          <Route path="masters/transfer" element={<MasterDataTransfer />} />  {/* ✅ NEW */}
-          <Route path="masters/hierarchy-management" element={<HierarchyManagement />} />
-          <Route path="masters/stp" element={<STPCreation />} />
-          <Route path="masters/product-creation" element={<ProductCreation />} />
-          <Route path="masters/crm-mapping" element={<CRMDoctorMapping />} />
+          <Route path="masters/designation" element={withSuspense(DesignationCreation)} />
+          <Route path="masters/users" element={<Navigate to="directory" replace />} />
+          <Route path="masters/users/directory" element={withSuspense(UserDirectory)} />
+          <Route path="masters/users/create" element={withSuspense(UserCreation)} />
+          <Route path="masters/areas" element={withSuspense(AreaCreation)} />
+          <Route path="masters/doctors" element={withSuspense(DoctorChemistCreation)} />
+          <Route
+            path="masters/headquarter-mapping"
+            element={withSuspense(HeadquarterMapping)}
+          />
+          <Route
+            path="masters/change-headquarter"
+            element={withSuspense(ChangeHeadquarter)}
+          />
+          <Route path="masters/transfer" element={withSuspense(MasterDataTransfer)} />
+          <Route
+            path="masters/hierarchy-management"
+            element={withSuspense(HierarchyManagement)}
+          />
+          <Route path="masters/stp" element={withSuspense(STPCreation)} />
+          <Route path="masters/product-creation" element={withSuspense(ProductCreation)} />
+          <Route path="masters/crm-mapping" element={withSuspense(CRMDoctorMapping)} />
 
-          <Route path="approvals/master-data" element={<MasterData />} />
-          <Route path="approvals/tour-program" element={<ApproveTourProgram />} />
-          <Route path="approvals/stp" element={<STPApprove />} />
+          <Route path="approvals/master-data" element={withSuspense(MasterData)} />
+          <Route path="approvals/tour-program" element={withSuspense(ApproveTourProgram)} />
+          <Route path="approvals/stp" element={withSuspense(STPApprove)} />
 
-          {/* Placeholders for the rest of your blueprint */}
-          <Route path="master-data" element={<div className="p-4">Master Data Coming Soon</div>} />
-          <Route path="reports" element={<div className="p-4">Reports & Analytics Coming Soon</div>} />
-          <Route path="settings" element={<div className="p-4">Settings & Profile Coming Soon</div>} />
+          <Route path="expenses/fare-rate-card" element={withSuspense(FareRateCard)} />
+          <Route path="expense/statewise-da" element={<StateWiseDA />} />
+
+          <Route path="stock/submit-modify" element={withSuspense(SSSSubmitModify)} />
+          <Route path="stock/view" element={withSuspense(SSSView)} />
+          <Route path="stock/user-stockist-mapping" element={withSuspense(UserStockistMapping)} />
+          <Route path="stock/mapping-deletion-report" element={withSuspense(StockistMappingDeletionReport)} />
+
+          {/* Target Routes */}
+          <Route path="target/submission" element={withSuspense(TargetSubmission)} />
+          <Route path="target/modify" element={withSuspense(TargetModify)} />
+          <Route path="target/view" element={withSuspense(TargetView)} />
+
+          
         </Route>
       </Route>
     </Routes>

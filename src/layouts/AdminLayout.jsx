@@ -81,7 +81,18 @@ export default function AdminLayout() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => navigate("/login");
+  const handleLogout = () => {
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("role");
+
+  // Optional cleanup of old keys
+  sessionStorage.removeItem("authToken");
+  sessionStorage.removeItem("userRole");
+  sessionStorage.removeItem("mr_token");
+  sessionStorage.removeItem("mr_user");
+
+  navigate("/login", { replace: true });
+};
 
   return (
     <>
@@ -225,20 +236,21 @@ export default function AdminLayout() {
             <DropdownMenu icon={<Database size={19} />} label="Master Creations"
               collapsed={collapsed} isOpen={masterCreationsOpen} toggle={() => setMasterCreationsOpen(!masterCreationsOpen)}>
               <SubLink to="/admin/masters/designation"          label="1. Designation Creation" />
-              <SubLink to="/admin/masters/users"                label="2. User Creation" />
-              <SubLink to="/admin/masters/areas"                label="3. Area Creation" />
-              <SubLink to="/admin/masters/doctors"              label="4. Doctor/Chemist Creation" />
-              <SubLink to="/admin/masters/headquarter-mapping"  label="5. Headquarter Mapping" />
-              <SubLink to="/admin/masters/change-headquarter"   label="6. Change Headquarter" />
-              <SubLink to="/admin/masters/transfer"             label="7. Master Data Transfer" />
-              <SubLink to="/admin/masters/hierarchy-management" label="8. Hierarchy Management" />
-              <SubLink to="/admin/masters/stp"                  label="9. STP Creation" />
-              <SubLink to="/admin/masters/product-creation"     label="10. Product Creation" />
-              <SubLink to="/admin/masters/broadcast"            label="11. Broadcast Message" />
-              <NestedDropdown label="12. CRM" isOpen={crmMasterOpen} toggle={() => setCrmMasterOpen(!crmMasterOpen)}>
+              <SubLink to="/admin/masters/users/directory"      label="2. User Directory" />
+              <SubLink to="/admin/masters/users/create"         label="3. User Creation" />
+              <SubLink to="/admin/masters/areas"                label="4. Area Creation" />
+              <SubLink to="/admin/masters/doctors"              label="5. Doctor/Chemist Creation" />
+              <SubLink to="/admin/masters/headquarter-mapping"  label="6. Headquarter Mapping" />
+              <SubLink to="/admin/masters/change-headquarter"   label="7. Change Headquarter" />
+              <SubLink to="/admin/masters/transfer"             label="8. Master Data Transfer" />
+              <SubLink to="/admin/masters/hierarchy-management" label="9. Hierarchy Management" />
+              <SubLink to="/admin/masters/stp"                  label="10. STP Creation" />
+              <SubLink to="/admin/masters/product-creation"     label="11. Product Creation" />
+              <SubLink to="/admin/masters/broadcast"            label="12. Broadcast Message" />
+              <NestedDropdown label="13. CRM" isOpen={crmMasterOpen} toggle={() => setCrmMasterOpen(!crmMasterOpen)}>
                 <SubLink to="/admin/masters/crm-submit" label="Submit CRM Data" />
               </NestedDropdown>
-              <SubLink to="/admin/masters/lock-unlock" label="13. Lock / Unlock" />
+              <SubLink to="/admin/masters/lock-unlock" label="14. Lock / Unlock" />
             </DropdownMenu>
 
             <DropdownMenu icon={<CheckSquare size={19} />} label="Approval Master"
@@ -250,16 +262,16 @@ export default function AdminLayout() {
 
             <DropdownMenu icon={<IndianRupee size={19} />} label="Expense"
               collapsed={collapsed} isOpen={expenseOpen} toggle={() => setExpenseOpen(!expenseOpen)}>
-              <SubLink to="/admin/expense/fare-rate"    label="1. Fare Rate Card" />
+              <SubLink to="/admin/expenses/fare-rate-card"   label="1. Fare Rate Card" />
               <SubLink to="/admin/expense/statewise-da" label="2. StateWise DA" />
             </DropdownMenu>
 
-            <DropdownMenu icon={<Package size={19} />} label="Stock & Statement"
+            <DropdownMenu icon={<Package size={19} />} label="Stock-Sales & Statement"
               collapsed={collapsed} isOpen={stockOpen} toggle={() => setStockOpen(!stockOpen)}>
               <SubLink to="/admin/stock/submit-modify"  label="1. Submit & Modify" />
               <SubLink to="/admin/stock/view"           label="2. View" />
-              <SubLink to="/admin/stock/mapping"        label="3. Stockiest Mapping" />
-              <SubLink to="/admin/stock/mapping-report" label="4. Stockiest Mapping Report" />
+              <SubLink to="/admin/stock/user-stockist-mapping"        label="3. Stockist Mapping" />
+              <SubLink to="/admin/stock/mapping-deletion-report" label="4. Stockist Mapping Deletion Report" />
             </DropdownMenu>
 
             <DropdownMenu icon={<Target size={19} />} label="Target"

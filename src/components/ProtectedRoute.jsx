@@ -1,16 +1,26 @@
-import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet } from "react-router-dom";
 
-export default function ProtectedRoute() {
-  // Check if a login token exists in localStorage
-  // (Adjust 'authToken' to whatever key you used when saving the token during login)
-  const isAuthenticated = localStorage.getItem('authToken');
+function getFallbackRouteForRole(role) {
+  if (role === "MANAGER") {
+    return "/manager";
+  }
+  if (role === "MR") {
+    return "/mr";
+  }
+  return "/";
+}
 
-  // If there is no token, kick them back to the login page
-  if (!isAuthenticated) {
+export default function ProtectedRoute({ allowedRoles }) {
+  const token = sessionStorage.getItem("token");
+  const role = sessionStorage.getItem("role");
+
+  if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  // If they have a token, let them access the child routes (like AdminLayout)
+  if (Array.isArray(allowedRoles) && allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+    return <Navigate to={getFallbackRouteForRole(role)} replace />;
+  }
+
   return <Outlet />;
 }
