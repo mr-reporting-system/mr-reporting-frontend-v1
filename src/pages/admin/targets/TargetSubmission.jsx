@@ -5,7 +5,51 @@ import {
 } from "lucide-react";
 import api from "../../../services/api";
 
+// ─── Global responsive styles (from reference) ───────────────────────────────
+const STYLES = `
+  *, *::before, *::after { box-sizing: border-box; }
+  .ucr-wrap  { width:100%; padding-bottom:48px; font-family:Inter,sans-serif; overflow-x: hidden; }
+  .ucr-card  { background:#fff; border-radius:16px; box-shadow:0 1px 4px rgba(0,0,0,0.07); border:1px solid #f3f4f6; overflow:visible; margin-bottom: 24px; min-width: 0; }
+  .ucr-header{ padding:16px 20px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:12px; }
+  .ucr-body  { padding:24px; }
+  .ucr-footer{ padding:14px 24px; background:#f9fafb; border-top:1px solid #f3f4f6; display:flex; align-items:center; justify-content:flex-end; border-radius:0 0 16px 16px; flex-wrap: wrap; gap: 12px; }
+
+  /* Responsive Table Scroll Logic */
+  .ucr-table-container {
+    border: 1px solid #f3f4f6;
+    border-radius: 12px;
+    overflow-x: auto;
+    background: #fff;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+  .ucr-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 800px; }
+  .ucr-table thead { background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
+  .ucr-table th { padding: 12px 16px; text-align: center; font-weight: 700; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  .ucr-table td { padding: 12px 16px; color: #374151; border-bottom: 1px solid #f3f4f6; white-space: nowrap; }
+
+  .ucr-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:24px; }
+  .ucr-grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:20px; margin-bottom:24px; }
+  .ucr-grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; align-items: center; }
+
+  @media(max-width:1024px){
+    .ucr-grid, .ucr-grid-4, .ucr-grid-2 { grid-template-columns:repeat(2,1fr); gap:16px; }
+    .hide-on-mobile { display: none; }
+  }
+  @media(max-width:768px){
+    .ucr-grid, .ucr-grid-4, .ucr-grid-2 { grid-template-columns:1fr; gap:16px; }
+    .ucr-body  { padding:16px; }
+    .ucr-header { padding: 16px; flex-direction: column; align-items: flex-start; }
+    .ucr-header > div { width: 100%; }
+    .ucr-header > button { align-self: flex-end; margin-top: -30px; }
+    .ucr-footer { justify-content: center; flex-direction: column; }
+    .ucr-footer > button { width: 100%; justify-content: center; }
+  }
+  @keyframes ucr-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+`;
+
 const INPUT_CLASS = "h-[38px]";
+const FH = 40;
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => ({
@@ -103,16 +147,17 @@ export default function TargetSubmission() {
     if (filters.districtIds.length > 0) {
       const fetchEmployees = async () => {
         try {
-          const res = await api.get(`/api/masters/employees/filter?stateId=${filters.stateId}&districtIds=${filters.districtIds.join(',')}`, getAuthHeaders());
+          const districtQuery = filters.districtIds.join(',');
+          const res = await api.get(`/api/target/submission/employees?stateId=${filters.stateId}&districtId=${districtQuery}`, getAuthHeaders());
+          
           const employeeData = res.data?.data || res.data || [];
           
-          // ✅ Normalization to format name as "Name-(Designation)" as requested
           const normalizedEmployees = Array.isArray(employeeData) ? employeeData.map((e) => {
-            const name = e.employee_name || e.employeeName || e.name || "Unknown";
-            const designation = e.designation_name || e.designationName || e.designation || "";
+            const name = e.name || e.employee_name || "Unknown";
+            const type = e.type || e.designation || "";
             return {
               id: String(e.id ?? e.employeeId),
-              employeeName: designation ? `${name}-(${designation})` : name
+              employeeName: type ? `${name}-(${type})` : name
             };
           }) : [];
           setEmployees(normalizedEmployees.filter(opt => opt.id !== ""));
@@ -137,9 +182,7 @@ export default function TargetSubmission() {
     }
 
     setIsLoading(true);
-    // Simulating a quick validation/fetch before opening the form
     setTimeout(() => {
-      // Clear previous inputs when opening form for new selection
       setTargetData({
         jan: "", feb: "", mar: "", apr: "", may: "", jun: "",
         jul: "", aug: "", sep: "", oct: "", nov: "", dec: ""
@@ -150,7 +193,6 @@ export default function TargetSubmission() {
   };
 
   const handleTableChange = (monthKey, value) => {
-    // Allow only numbers
     if (value === "" || /^\d*\.?\d*$/.test(value)) {
       setTargetData(prev => ({ ...prev, [monthKey]: value }));
     }
@@ -162,28 +204,25 @@ export default function TargetSubmission() {
 
     try {
       const payload = {
-        stateId: Number(filters.stateId),
-        districtIds: filters.districtIds.map(Number),
-        employeeIds: filters.employeeIds.map(Number),
         year: Number(filters.year),
-        targets: {
-          jan: Number(targetData.jan) || 0,
-          feb: Number(targetData.feb) || 0,
-          mar: Number(targetData.mar) || 0,
-          apr: Number(targetData.apr) || 0,
-          may: Number(targetData.may) || 0,
-          jun: Number(targetData.jun) || 0,
-          jul: Number(targetData.jul) || 0,
-          aug: Number(targetData.aug) || 0,
-          sep: Number(targetData.sep) || 0,
-          oct: Number(targetData.oct) || 0,
-          nov: Number(targetData.nov) || 0,
-          dec: Number(targetData.dec) || 0,
+        employeeIds: filters.employeeIds.map(Number),
+        monthlyTargets: {
+          "1": Number(targetData.jan) || 0,
+          "2": Number(targetData.feb) || 0,
+          "3": Number(targetData.mar) || 0,
+          "4": Number(targetData.apr) || 0,
+          "5": Number(targetData.may) || 0,
+          "6": Number(targetData.jun) || 0,
+          "7": Number(targetData.jul) || 0,
+          "8": Number(targetData.aug) || 0,
+          "9": Number(targetData.sep) || 0,
+          "10": Number(targetData.oct) || 0,
+          "11": Number(targetData.nov) || 0,
+          "12": Number(targetData.dec) || 0
         }
       };
 
-      // ⚠️ Replace with actual backend API for Target Submission
-      await api.post("/api/targets/submission", payload, getAuthHeaders());
+      await api.post("/api/target/submission", payload, getAuthHeaders());
       
       setSuccessMsg("Target data submitted successfully!");
       setTimeout(() => {
@@ -198,105 +237,88 @@ export default function TargetSubmission() {
     }
   };
 
-  // ─── Dropdown Options Mapping ────────────────────────────────────────────────
-  const stateOpts = states.map(s => ({ value: s.id, label: s.stateName }));
-  const distOpts = districts.map(d => ({ value: d.id, label: d.districtName }));
-  const empOpts = employees.map(e => ({ value: e.id, label: e.employeeName }));
+  // ─── Dropdown Options Mapping ───────────────────────────────────────────────
+  const stateOpts = states.map(s => ({ id: String(s.id), value: String(s.id), label: s.stateName }));
+  const distOpts = districts.map(d => ({ id: String(d.id), value: String(d.id), label: d.districtName }));
+  const empOpts = employees.map(e => ({ id: String(e.id), value: String(e.id), label: e.employeeName }));
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 animate-in fade-in duration-400 pb-12 font-sans">
-      
+    <div className="ucr-wrap">
+      <style>{STYLES}</style>
+
       {/* Global Alerts */}
-      {(error || successMsg) && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col gap-2">
-          {error && (
-            <div className="flex items-center gap-2.5 bg-red-50 text-red-600 px-4 py-3 rounded-lg border border-red-100 text-sm font-bold">
-              <AlertCircle size={16} /> {error}
-            </div>
-          )}
-          {successMsg && (
-            <div className="flex items-center gap-2.5 bg-blue-50 text-blue-700 px-4 py-3 rounded-lg border border-blue-100 text-sm font-bold">
-              <CheckCircle2 size={16} /> {successMsg}
-            </div>
-          )}
+      {error && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 16px", color: "#dc2626", fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+      {successMsg && (
+        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "10px 16px", color: "#16a34a", fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <CheckCircle2 size={16} /> {successMsg}
         </div>
       )}
 
       {/* ══ FILTER SECTION ═════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-blue-600 via-blue-500 to-sky-400 rounded-t-xl" />
-        
-        {/* Standardized Header */}
-        <div className="px-6 sm:px-8 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/40">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 border border-blue-100 shadow-sm">
-              <Target size={20} className="text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">Target Submission</h2>
-              <p className="text-xs font-semibold text-slate-400 mt-0.5">Set monthly target amounts for employees</p>
-            </div>
+      <div className="ucr-card">
+        <div className="ucr-header">
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "#eff6ff", border: "1px solid #dbeafe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Target size={17} style={{ color: "#2563eb" }} />
           </div>
-
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-slate-600">Filter</span>
-            <button 
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`w-11 h-6 rounded-full flex items-center px-1 transition-colors duration-300 focus:outline-none ${isFilterOpen ? "bg-blue-600" : "bg-slate-300"}`}
-            >
-              <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${isFilterOpen ? "translate-x-5" : "translate-x-0"}`} />
-            </button>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0 }}>Target Submission</h2>
+            <p style={{ fontSize: 11, color: "#6b7280", margin: 0, marginTop: 2 }}>Set monthly target amounts for employees</p>
           </div>
+          <button onClick={() => setIsFilterOpen(!isFilterOpen)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#6b7280" }}>FILTER</span>
+              <div style={{ width: 34, height: 18, borderRadius: 20, background: isFilterOpen ? "#2563eb" : "#d1d5db", position: "relative", cursor: "pointer", transition: "0.2s" }}>
+                <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: isFilterOpen ? 18 : 2, transition: "0.2s" }} />
+              </div>
+            </div>
+          </button>
         </div>
 
         {isFilterOpen && (
-          <div className="p-6 sm:p-8 bg-white animate-in slide-in-from-top-2 duration-300">
-            {/* Custom Grid Layout matching the UI Mockup */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
-              
+          <div className="ucr-body">
+            <div className="ucr-grid-4">
               {/* Row 1 */}
-              <div className="flex items-center gap-3 md:col-span-1">
-                <input type="radio" checked readOnly className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-default" />
-                <span className="text-sm font-semibold text-slate-600">* User wise</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 16, height: 16, borderRadius: "50%", border: "4px solid #2563eb", background: "#fff" }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#4b5563" }}>* User wise</span>
               </div>
-              <div className="md:col-span-1">
-                <SingleDropdown label="SELECT STATE *" options={stateOpts} value={filters.stateId} onSelect={(v) => handleFilterChange("stateId", v)} />
-              </div>
-              <div className="md:col-span-1">
-                <MultiDropdown label="SELECT DISTRICT *" options={distOpts} selectedIds={filters.districtIds} onChange={(v) => handleFilterChange("districtIds", v)} disabled={!filters.stateId} />
-              </div>
-              <div className="md:col-span-1">
-                <MultiDropdown label="SELECT EMPLOYEE *" options={empOpts} selectedIds={filters.employeeIds} onChange={(v) => handleFilterChange("employeeIds", v)} disabled={!filters.districtIds.length} />
-              </div>
+              <FloatingDropdown label="SELECT STATE *" options={stateOpts} value={filters.stateId} onSelect={(v) => handleFilterChange("stateId", v)} />
+              <MultiSelectDropdown label="SELECT DISTRICT *" options={distOpts} selectedIds={filters.districtIds} onChange={(v) => handleFilterChange("districtIds", v)} disabled={!filters.stateId} />
+              <MultiSelectDropdown label="SELECT EMPLOYEE *" options={empOpts} selectedIds={filters.employeeIds} onChange={(v) => handleFilterChange("employeeIds", v)} disabled={!filters.districtIds.length} />
 
               {/* Row 2 */}
-              <div className="flex items-center gap-3 md:col-span-1 mt-4">
-                <input type="radio" checked readOnly className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-default" />
-                <span className="text-sm font-semibold text-slate-600">* Monthly</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 16, height: 16, borderRadius: "50%", border: "4px solid #2563eb", background: "#fff" }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#4b5563" }}>* Monthly</span>
               </div>
-              <div className="md:col-span-1 mt-4">
-                <SingleDropdown label="SELECT YEAR *" options={YEARS} value={filters.year} onSelect={(v) => handleFilterChange("year", v)} />
-              </div>
-              <div className="md:col-span-2 hidden md:block mt-4"></div> {/* Spacer */}
+              <FloatingDropdown label="SELECT YEAR *" options={YEARS} value={filters.year} onSelect={(v) => handleFilterChange("year", v)} />
+              <div style={{ gridColumn: "span 2" }} className="hide-on-mobile"></div>
 
               {/* Row 3 */}
-              <div className="flex items-center gap-3 md:col-span-1 mt-4">
-                <input type="radio" checked readOnly className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-default" />
-                <span className="text-sm font-semibold text-slate-600">* Amount Wise</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 16, height: 16, borderRadius: "50%", border: "4px solid #2563eb", background: "#fff" }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#4b5563" }}>* Amount Wise</span>
               </div>
-              <div className="md:col-span-1 mt-4">
+              <div>
                 <button 
                   onClick={handleFilterSubmit} 
                   disabled={isLoading} 
-                  className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white h-[38px] px-8 rounded-lg text-sm font-bold transition-all shadow-md shadow-blue-200 active:scale-95 disabled:opacity-50 w-full"
+                  style={{
+                    height: 40, width: "100%", borderRadius: 8, background: "#2563eb", color: "#fff",
+                    fontSize: 13, fontWeight: 700, border: "none", cursor: isLoading ? "not-allowed" : "pointer",
+                    opacity: isLoading ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+                  }}
                 >
-                  {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                  {isLoading ? <Loader2 size={16} style={{ animation: "ucr-spin 1s linear infinite" }} /> : <Check size={16} />}
                   Submit
                 </button>
               </div>
-              <div className="md:col-span-2 hidden md:block mt-4"></div> {/* Spacer */}
-
+              <div style={{ gridColumn: "span 2" }} className="hide-on-mobile"></div>
             </div>
           </div>
         )}
@@ -304,44 +326,50 @@ export default function TargetSubmission() {
 
       {/* ══ TABLE SECTION (Target Submission Form) ══════════════════════════ */}
       {tableVisible && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/40">
-            <h3 className="text-base font-bold text-slate-800">Target Submission Form</h3>
+        <div className="ucr-card animate-in slide-in-from-bottom-4 duration-500">
+          <div className="ucr-header" style={{ background: "#f9fafb" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: "#374151", margin: 0 }}>Target Submission Form</h3>
           </div>
 
-          <div className="overflow-x-auto p-4">
-            <table className="w-full text-sm text-center border-collapse">
-              <thead className="bg-blue-600 text-white text-[12px] font-bold">
-                <tr>
-                  {MONTH_COLUMNS.map((month, index) => (
-                    <th key={month.key} className={`py-3 px-2 border-r border-blue-500 last:border-r-0 min-w-[90px] ${index === 0 ? 'rounded-tl-lg' : ''} ${index === 11 ? 'rounded-tr-lg' : ''}`}>
-                      {month.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="bg-white">
-                  {MONTH_COLUMNS.map((month) => (
-                    <td key={month.key} className="py-3 px-2 border border-slate-200">
-                      <TableInput 
-                        value={targetData[month.key]} 
-                        onChange={(val) => handleTableChange(month.key, val)} 
-                      />
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
+          <div className="ucr-body" style={{ padding: 0 }}>
+            <div className="ucr-table-container" style={{ border: "none", borderRadius: "0 0 16px 16px" }}>
+              <table className="ucr-table">
+                <thead>
+                  <tr>
+                    {MONTH_COLUMNS.map((month) => (
+                      <th key={month.key} style={{ minWidth: 90 }}>
+                        {month.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ background: "#fff" }}>
+                    {MONTH_COLUMNS.map((month) => (
+                      <td key={month.key} style={{ padding: "12px 8px" }}>
+                        <TableInput 
+                          value={targetData[month.key]} 
+                          onChange={(val) => handleTableChange(month.key, val)} 
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="px-6 py-5 bg-slate-50 border-t border-slate-100 flex items-center justify-start rounded-b-xl">
+          <div className="ucr-footer" style={{ justifyContent: "flex-start", borderTop: "1px solid #f3f4f6" }}>
             <button 
               onClick={handleFinalSubmit} 
               disabled={isSubmitting} 
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-10 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                height: 40, padding: "0 32px", borderRadius: 8, background: "#2563eb", color: "#fff",
+                fontSize: 13, fontWeight: 700, border: "none", cursor: isSubmitting ? "not-allowed" : "pointer",
+                opacity: isSubmitting ? 0.6 : 1, display: "flex", alignItems: "center", gap: 8
+              }}
             >
-              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {isSubmitting ? <Loader2 size={16} style={{ animation: "ucr-spin 1s linear infinite" }} /> : <Save size={16} />}
               Submit Target
             </button>
           </div>
@@ -353,139 +381,237 @@ export default function TargetSubmission() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Helper Components
+// UI Components Restyled to match Reference Exactly
 // ═══════════════════════════════════════════════════════════════════
 
 function TableInput({ value, onChange }) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <input 
       type="text" 
       value={value} 
       onChange={(e) => onChange(e.target.value)}
-      className="w-full h-[32px] text-center border border-slate-300 rounded text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white shadow-sm"
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      style={{
+        width: "100%", height: 34, textAlign: "center", border: `1.5px solid ${isFocused ? "#2563eb" : "#d1d5db"}`,
+        borderRadius: 6, fontSize: 13, fontWeight: 600, color: "#111827", outline: "none",
+        background: "#fff", transition: "0.2s"
+      }}
     />
   );
 }
 
-function SingleDropdown({ label, value, onSelect, options = [], disabled }) {
+function FloatingDropdown({ label, options, value, onSelect, disabled }) {
   const [isOpen, setIsOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const ref = useRef(null);
 
+  const selectedOption = options.find((option) => String(option.value) === String(value));
+  const active = isOpen || Boolean(value);
+
   const openMenu = () => {
     if (disabled) return;
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) {
+      setPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width
+      });
+    }
     setIsOpen(true);
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleScroll = (e) => { if (e.target?.closest && e.target.closest('.dropdown-portal')) return; setIsOpen(false); };
-    const handleResize = () => setIsOpen(false);
-    window.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("scroll", handleScroll, true); window.removeEventListener("resize", handleResize); };
-  }, [isOpen]);
-
-  const selected = options.find(o => String(o.value) === String(value));
-  const hasValue = Boolean(value !== "" && value !== null && value !== undefined);
-  
-  const borderCls = disabled ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed" : hasValue ? isOpen ? "border-blue-500 ring-2 ring-blue-100 bg-white" : "border-blue-400 bg-white" : isOpen ? "border-slate-400 ring-2 ring-slate-100 bg-white" : "border-slate-300 bg-white";
-  const labelColor = disabled ? "text-slate-400" : hasValue ? "text-blue-600 font-bold" : isOpen ? "text-slate-500 font-bold" : "text-slate-400 font-semibold";
-  const labelPos = hasValue || isOpen ? "-top-[9px] text-[10px] bg-white px-1.5" : "top-[9px] text-sm bg-transparent";
-
   return (
     <div className="relative w-full select-none mt-1">
-      <div ref={ref} onClick={openMenu} className={`w-full ${INPUT_CLASS} rounded-lg border flex items-center transition-all px-3.5 ${borderCls}`}>
-        <span className={`truncate text-sm font-semibold flex-1 ${hasValue ? "text-slate-800" : "text-transparent"}`}>{selected?.label || " "}</span>
-        <div className={`absolute right-3 flex items-center gap-1 pointer-events-none transition-transform duration-200 ${hasValue ? "text-blue-500" : "text-slate-400"} ${isOpen ? "rotate-180" : ""}`}>
-          <ChevronDown size={14} />
-        </div>
+      <div
+        ref={ref}
+        onClick={openMenu}
+        style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 12px", fontSize: 13, display: "flex",
+          alignItems: "center", border: `1.5px solid ${active && !disabled ? "#2563eb" : "#d1d5db"}`,
+          cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#f3f4f6" : "#fff",
+          transition: "border-color 0.2s"
+        }}
+      >
+        <span style={{ flex: 1, fontWeight: 600, color: (Boolean(value) && !disabled) ? "#111827" : disabled && Boolean(value) ? "#6b7280" : "transparent", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginRight: 8 }}>
+          {selectedOption?.label || " "}
+        </span>
+        <ChevronDown size={14} style={{ color: "#9ca3af", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s", flexShrink: 0 }} />
       </div>
-      <label className={`absolute left-3 pointer-events-none z-10 transition-all duration-200 tracking-wide uppercase ${labelPos} ${labelColor}`}>{label}</label>
+      <label
+        style={{
+          position: "absolute", left: 10, top: active ? -9 : 12, fontSize: active ? 10 : 12,
+          fontWeight: 600, color: disabled ? "#9ca3af" : (active ? "#2563eb" : "#9ca3af"), background: disabled ? (active ? "#f3f4f6" : "transparent") : "#fff",
+          padding: "0 4px", transition: "0.2s", pointerEvents: "none",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "calc(100% - 20px)"
+        }}
+      >
+        {label}
+      </label>
 
       {isOpen && !disabled && (
         <Portal top={pos.top} left={pos.left} width={pos.width} onClose={() => setIsOpen(false)}>
-          <ul className="py-1.5 max-h-60 overflow-y-auto">
+          <div style={{ maxHeight: 250, overflowY: "auto", padding: "4px 0" }}>
             {options.length === 0 ? (
-               <li className="px-4 py-3 text-sm text-slate-400 italic text-center">No options available</li>
-            ) : options.map((opt, i) => (
-              <li key={i} onMouseDown={e => { e.preventDefault(); onSelect(opt.value); setIsOpen(false); }}
-                className={`px-4 py-2.5 text-sm cursor-pointer font-semibold transition-colors ${String(value) === String(opt.value) ? "bg-blue-50 text-blue-600 border-l-[3px] border-blue-500" : "text-slate-600 hover:bg-slate-50 hover:text-blue-600 border-l-[3px] border-transparent"}`}>
-                {opt.label}
-              </li>
-            ))}
-          </ul>
+              <p style={{ padding: "12px 16px", fontSize: 13, color: "#9ca3af", margin: 0, textAlign: "center", fontStyle: "italic" }}>No options available</p>
+            ) : (
+              options.map((opt) => (
+                <div
+                  key={opt.value}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onSelect(opt.value);
+                    setIsOpen(false);
+                  }}
+                  style={{
+                    padding: "10px 12px", fontSize: 13, cursor: "pointer", fontWeight: 600,
+                    background: String(value) === String(opt.value) ? "#eff6ff" : "transparent",
+                    color: String(value) === String(opt.value) ? "#2563eb" : "#374151"
+                  }}
+                >
+                  {opt.label}
+                </div>
+              ))
+            )}
+          </div>
         </Portal>
       )}
     </div>
   );
 }
 
-function MultiDropdown({ label, options = [], selectedIds, onChange, disabled }) {
+function MultiSelectDropdown({ label, options, selectedIds, onChange, disabled = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const ref = useRef(null);
 
+  const toggleValue = (value) => {
+    if (selectedIds.includes(value)) {
+      onChange(selectedIds.filter((item) => item !== value));
+      return;
+    }
+    onChange([...selectedIds, value]);
+  };
+
+  const selectAll = () => onChange(options.map((option) => option.id || option.value));
+  const clearAll = () => onChange([]);
+
+  const selectedLabel = options
+    .filter((option) => selectedIds.includes(option.id || option.value))
+    .map((option) => option.label)
+    .join(", ");
+
+  const hasValue = selectedIds.length > 0;
+  const active = isOpen || hasValue;
+
   const openMenu = () => {
     if (disabled) return;
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) {
+      setPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width
+      });
+    }
     setIsOpen(true);
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleScroll = (e) => { if (e.target?.closest && e.target.closest('.dropdown-portal')) return; setIsOpen(false); };
-    const handleResize = () => setIsOpen(false);
-    window.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("scroll", handleScroll, true); window.removeEventListener("resize", handleResize); };
-  }, [isOpen]);
-
-  const toggle = id => onChange(selectedIds.includes(id) ? selectedIds.filter(i => i !== id) : [...selectedIds, id]);
-  const selectAll = () => onChange(options.map(o => o.id));
-  const clearAll = () => onChange([]);
-
-  const hasValue = selectedIds.length > 0;
-  const displayText = hasValue ? options.filter(o => selectedIds.includes(o.id)).map(o => o.label).join(", ") : "";
-  
-  const borderCls = disabled ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed" : hasValue ? isOpen ? "border-blue-500 ring-2 ring-blue-100 bg-white" : "border-blue-400 bg-white" : isOpen ? "border-slate-400 ring-2 ring-slate-100 bg-white" : "border-slate-300 bg-white";
-  const labelColor = disabled ? "text-slate-400" : hasValue ? "text-blue-600 font-bold" : isOpen ? "text-slate-500 font-bold" : "text-slate-400 font-semibold";
-  const labelPos = hasValue || isOpen ? "-top-[9px] text-[10px] bg-white px-1.5" : "top-[9px] text-sm bg-transparent";
-
   return (
     <div className="relative w-full select-none mt-1">
-      <div ref={ref} onClick={openMenu} className={`w-full ${INPUT_CLASS} rounded-lg border flex items-center transition-all px-3.5 ${borderCls}`}>
-        <span className={`block truncate text-sm font-semibold flex-1 min-w-0 ${hasValue ? "text-slate-800" : "text-transparent"}`}>{displayText || " "}</span>
-        <div className={`absolute right-3 flex items-center gap-1 pointer-events-none transition-transform duration-200 ${hasValue ? "text-blue-500" : "text-slate-400"} ${isOpen ? "rotate-180" : ""}`}>
-          <ChevronDown size={14} />
-        </div>
+      <div
+        ref={ref}
+        onClick={openMenu}
+        style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 12px", fontSize: 13, display: "flex",
+          alignItems: "center", border: `1.5px solid ${active && !disabled ? "#2563eb" : "#d1d5db"}`,
+          cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#f3f4f6" : "#fff",
+          transition: "border-color 0.2s"
+        }}
+      >
+        <span style={{ flex: 1, fontWeight: 600, color: hasValue ? "#111827" : "transparent", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginRight: 8 }}>
+          {selectedLabel || " "}
+        </span>
+        <ChevronDown size={14} style={{ color: "#9ca3af", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s", flexShrink: 0 }} />
       </div>
-      <label className={`absolute left-3 pointer-events-none z-10 transition-all duration-200 tracking-wide uppercase ${labelPos} ${labelColor}`}>{label}</label>
+      <label
+        style={{
+          position: "absolute", left: 10, top: active ? -9 : 12, fontSize: active ? 10 : 12,
+          fontWeight: 600, color: disabled ? "#9ca3af" : (active ? "#2563eb" : "#9ca3af"), background: disabled ? (active ? "#f3f4f6" : "transparent") : "#fff",
+          padding: "0 4px", transition: "0.2s", pointerEvents: "none",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "calc(100% - 20px)"
+        }}
+      >
+        {label}
+      </label>
 
       {isOpen && !disabled && (
         <Portal top={pos.top} left={pos.left} width={pos.width} onClose={() => setIsOpen(false)}>
-          <div className="flex border-b border-slate-100">
-            <button type="button" onMouseDown={e => { e.preventDefault(); selectAll(); }} className="flex-1 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors">Select All</button>
-            <button type="button" onMouseDown={e => { e.preventDefault(); clearAll(); }} className="flex-1 py-2.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">Clear All</button>
+          <div style={{ display: "flex", borderBottom: "1px solid #f3f4f6" }}>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                selectAll();
+              }}
+              style={{ flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 700, color: "#fff", background: "#2563eb", border: "none", cursor: "pointer" }}
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                clearAll();
+              }}
+              style={{ flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 700, color: "#fff", background: "#ef4444", border: "none", cursor: "pointer" }}
+            >
+              Clear All
+            </button>
           </div>
-          <ul className="py-1.5 max-h-52 overflow-y-auto">
+
+          <div style={{ maxHeight: 250, overflowY: "auto", padding: "4px 0" }}>
             {options.length === 0 ? (
-               <li className="px-4 py-3 text-sm text-slate-400 italic text-center">No options available</li>
-            ) : options.map((opt, idx) => {
-              const isSel = selectedIds.includes(opt.id);
-              return (
-                <li key={opt.id ?? idx} onMouseDown={e => { e.preventDefault(); toggle(opt.id); }} className={`px-4 py-2.5 text-sm cursor-pointer flex items-center gap-3 transition-colors ${isSel ? "bg-blue-50" : "hover:bg-slate-50"}`}>
-                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${isSel ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}>
-                    {isSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                  </div>
-                  <span className={`font-semibold ${isSel ? "text-blue-700" : "text-slate-600"}`}>{opt.label}</span>
-                </li>
-              );
-            })}
-          </ul>
+              <p style={{ padding: "12px 16px", fontSize: 13, color: "#9ca3af", margin: 0, textAlign: "center", fontStyle: "italic" }}>No options available.</p>
+            ) : (
+              options.map((option) => {
+                const optId = String(option.id || option.value);
+                const isSelected = selectedIds.includes(optId);
+                return (
+                  <button
+                    key={optId}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      toggleValue(optId);
+                    }}
+                    style={{
+                      width: "100%", textAlign: "left", padding: "10px 16px", fontSize: 13, fontWeight: 600,
+                      display: "flex", alignItems: "center", gap: 10, background: isSelected ? "#eff6ff" : "transparent",
+                      color: isSelected ? "#2563eb" : "#4b5563", border: "none", cursor: "pointer"
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 16, height: 16, borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                        border: isSelected ? "2px solid #2563eb" : "2px solid #d1d5db", background: isSelected ? "#2563eb" : "#fff"
+                      }}
+                    >
+                      {isSelected && (
+                        <svg viewBox="0 0 10 8" style={{ width: 10, height: 8 }} fill="none">
+                          <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    {option.label}
+                  </button>
+                );
+              })
+            )}
+          </div>
         </Portal>
       )}
     </div>
@@ -494,17 +620,42 @@ function MultiDropdown({ label, options = [], selectedIds, onChange, disabled })
 
 function Portal({ top, left, width, onClose, children }) {
   const ref = useRef(null);
+
   useEffect(() => {
-    const t = setTimeout(() => {
-      const h = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-      document.addEventListener("mousedown", h);
-      return () => document.removeEventListener("mousedown", h);
+    const timer = setTimeout(() => {
+      const handleMouseDown = (e) => {
+        if (ref.current && !ref.current.contains(e.target)) {
+          onClose();
+        }
+      };
+      document.addEventListener("mousedown", handleMouseDown);
+      return () => document.removeEventListener("mousedown", handleMouseDown);
     }, 10);
-    return () => clearTimeout(t);
+
+    return () => clearTimeout(timer);
   }, [onClose]);
-  
+
+  useEffect(() => {
+    const handleScroll = (e) => {
+      if (ref.current && ref.current.contains(e.target)) return;
+      onClose();
+    };
+    
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", onClose);
+    
+    return () => {
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+
   return (
-    <div ref={ref} style={{ position: "fixed", top, left, width, zIndex: 9999 }} className="dropdown-portal bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+    <div
+      ref={ref}
+      style={{ position: "fixed", top, left, width, zIndex: 99999 }}
+      className="dropdown-portal bg-white border border-[#e5e7eb] rounded-lg shadow-xl overflow-hidden"
+    >
       {children}
     </div>
   );

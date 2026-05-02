@@ -1,581 +1,1129 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Loader2, AlertCircle, CheckCircle2, ChevronDown,
-  Briefcase, Plus, Trash2, Edit, X, Save, Search,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MapPin
+  AlertCircle,
+  Briefcase,
+  CheckCircle2,
+  ChevronDown,
+  Edit2,
+  Loader2,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+  X,
 } from "lucide-react";
 import api from "../../../services/api";
 
-const PAGE_SIZES = [10, 20, 50];
-const INPUT_CLASS = "h-[38px]";
+// ─── Global responsive styles (from reference) ───────────────────────────────
+const STYLES = `
+  *, *::before, *::after { box-sizing: border-box; }
+  .ucr-wrap  { width:100%; padding-bottom:48px; font-family:Inter,sans-serif; overflow-x: hidden; }
+  .ucr-card  { background:#fff; border-radius:16px; box-shadow:0 1px 4px rgba(0,0,0,0.07); border:1px solid #f3f4f6; overflow:visible; margin-bottom: 24px; }
+  .ucr-header{ padding:16px 20px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:12px; }
+  .ucr-body  { padding:24px; }
+  .ucr-footer{ padding:14px 24px; background:#f9fafb; border-top:1px solid #f3f4f6; display:flex; align-items:center; justify-content:flex-end; border-radius:0 0 16px 16px; flex-wrap: wrap; gap: 12px; }
+
+  /* Responsive Table Scroll Logic */
+  .ucr-table-container {
+    border: 1px solid #f3f4f6;
+    border-radius: 12px;
+    overflow-x: auto;
+    background: #fff;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ucr-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1200px; }
+  .ucr-table thead { background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
+  .ucr-table th { padding: 12px 16px; text-align: left; font-weight: 700; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  .ucr-table td { padding: 12px 16px; color: #374151; border-bottom: 1px solid #f3f4f6; }
+
+  .ucr-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:24px; }
+  .ucr-grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-bottom:24px; }
+
+  /* Responsive Col Spans */
+  .col-span-2 { grid-column: span 2; }
+  .col-span-4 { grid-column: span 4; }
+
+  @media(max-width:1024px){
+    .ucr-grid, .ucr-grid-4 { grid-template-columns:repeat(2,1fr); gap:16px; }
+    .col-span-4 { grid-column: span 2; }
+  }
+  @media(max-width:768px){
+    .ucr-grid, .ucr-grid-4 { grid-template-columns:1fr; gap:16px; }
+    .col-span-2, .col-span-4 { grid-column: span 1 !important; }
+    .ucr-body  { padding:16px; }
+    .ucr-header { padding: 16px; flex-direction: column; align-items: flex-start; }
+    .ucr-header > div { width: 100%; }
+    .modal-close-btn { align-self: flex-end; margin-top: -30px; }
+    .ucr-footer { justify-content: center; }
+  }
+  @keyframes ucr-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+`;
+
+const FH = 40;
 
 const ALLOWANCE_OPTIONS = [
   { value: "KM Wise", label: "KM Wise" },
-  { value: "Lumsum",  label: "Lumsum" }
+  { value: "Lumsum", label: "Lumsum" },
 ];
-
 const APPLICABLE_OPTIONS = [
   { value: "hq", label: "HQ" },
   { value: "ex", label: "EX" },
-  { value: "out", label: "OUT" }
 ];
 
-const DEFAULT_FORM = { 
-  id: Date.now(), 
-  fromDistance: "", 
-  toDistance: "", 
-  allowance: "", 
-  applicableTo: "", 
-  taPerKm: "", 
-  frcCode: "", 
-  description: "" 
-};
+function createEmptyRule() {
+  return {
+    localId: `${Date.now()}-${Math.random()}`,
+    fromDistance: "",
+    toDistance: "",
+    allowanceType: "",
+    applicableTo: "",
+    fare: "",
+    frcCode: "",
+    description: "",
+  };
+}
+
+function normalizeDesignation(option) {
+  return {
+    id: String(option?.id ?? option?.designationId ?? option?.value ?? "").trim(),
+    name: String(
+      option?.name ??
+        option?.designation_name ??
+        option?.designationName ??
+        option?.label ??
+        "Unknown"
+    ).trim(),
+  };
+}
+
+function normalizeFrcRecord(item, index = 0) {
+  const designationId =
+    item?.designationId ??
+    item?.designation?.id ??
+    item?.designation_id ??
+    item?.designationCode ??
+    "";
+
+  const designationName =
+    item?.designationName ??
+    item?.designation?.name ??
+    item?.designation?.designation_name ??
+    item?.designation_name ??
+    item?.name ??
+    "-";
+
+  return {
+    id: item?.id ?? item?.frcId ?? item?._id ?? `frc-${index}`,
+    designationId: String(designationId ?? ""),
+    designationName: String(designationName ?? "-").trim() || "-",
+    fromDistance: item?.fromDistance ?? item?.from_distance ?? "",
+    toDistance: item?.toDistance ?? item?.to_distance ?? "",
+    allowanceType:
+      item?.allowanceType ?? item?.allowance_to_be_get ?? item?.allowance ?? "",
+    applicableTo: item?.applicableTo ?? item?.applicable_to ?? "",
+    fare: item?.fare ?? item?.taPerKm ?? item?.ta_per_km ?? "",
+    description: item?.description ?? "",
+    frcCode: item?.frcCode ?? item?.frc_code ?? "",
+  };
+}
+
+function getErrorMessage(error, fallbackMessage) {
+  return error?.response?.data?.message || fallbackMessage;
+}
 
 export default function FareRateCard() {
-  // ─── Master Data State ───────────────────────────────────────────────────────
   const [designations, setDesignations] = useState([]);
-  
-  // ─── Form State ──────────────────────────────────────────────────────────────
-  const [selectedDesigIds, setSelectedDesigIds] = useState([]);
-  const [forms, setForms] = useState([{ ...DEFAULT_FORM }]);
+  const [selectedDesignationIds, setSelectedDesignationIds] = useState([]);
+  const [rules, setRules] = useState([createEmptyRule()]);
 
-  // ─── Table & UI State ────────────────────────────────────────────────────────
-  const [frcList, setFrcList] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [records, setRecords] = useState([]);
+  const [showTable, setShowTable] = useState(false);
+
+  const [isLoadingInitial, setIsLoadingInitial] = useState(true);
+  const [isTableLoading, setIsTableLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
 
-  const [editModal, setEditModal] = useState(false);
-  const [editData, setEditData] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
-  // ─── Fetch Initial Data ──────────────────────────────────────────────────────
-  useEffect(() => {
-    fetchInitialData();
+  const clearNotifications = () => {
+    setError("");
+    setSuccessMessage("");
+  };
+
+  const fetchDesignations = useCallback(async () => {
+    try {
+      const response = await api.get("/api/expense/frc/designations");
+      const payload = response?.data?.data ?? response?.data ?? [];
+      const normalized = Array.isArray(payload)
+        ? payload
+            .map(normalizeDesignation)
+            .filter((item) => item.id && item.name)
+        : [];
+      setDesignations(normalized);
+    } catch {
+      try {
+        const fallbackResponse = await api.get("/api/masters/designations");
+        const fallbackPayload =
+          fallbackResponse?.data?.data ?? fallbackResponse?.data ?? [];
+        const normalizedFallback = Array.isArray(fallbackPayload)
+          ? fallbackPayload
+              .map(normalizeDesignation)
+              .filter((item) => item.id && item.name)
+          : [];
+        setDesignations(normalizedFallback);
+      } catch {
+        setError("Failed to load designation list.");
+      }
+    }
   }, []);
 
-  const fetchInitialData = async () => {
-    setIsLoading(true);
+  const fetchFrcRecords = useCallback(async ({ revealTable = false } = {}) => {
+    setIsTableLoading(true);
     try {
-      // ✅ Updated to Shubham's GET endpoints
-      const [desigRes, frcRes] = await Promise.all([
-        api.get("/api/expense/frc/designations"),
-        api.get("/api/expense/frc") 
-      ]);
-      
-      const desigData = desigRes.data?.data || desigRes.data || [];
-      setDesignations(Array.isArray(desigData) ? desigData : []);
-      
-      const frcData = frcRes.data?.data || frcRes.data || [];
-      setFrcList(Array.isArray(frcData) ? frcData : []);
-    } catch (err) {
-      setError("Failed to load initial data from server.");
+      const response = await api.get("/api/expense/frc");
+      const payload = response?.data?.data ?? response?.data ?? [];
+      const normalized = Array.isArray(payload)
+        ? payload.map((item, index) => normalizeFrcRecord(item, index))
+        : [];
+      setRecords(normalized);
+
+      if (revealTable || normalized.length > 0) {
+        setShowTable(true);
+      }
+    } catch (error) {
+      setError(getErrorMessage(error, "Failed to load Fare Rate Card records."));
     } finally {
-      setIsLoading(false);
+      setIsTableLoading(false);
     }
-  };
-
-  const refreshTable = async () => {
-    try {
-      // ✅ Updated to Shubham's GET endpoint
-      const res = await api.get("/api/expense/frc");
-      const data = res.data?.data || res.data || [];
-      setFrcList(Array.isArray(data) ? data : []);
-    } catch (err) { console.error("Failed to refresh table", err); }
-  };
-
-  // ─── Dynamic Form Handlers ───────────────────────────────────────────────────
-  const addForm = () => {
-    setForms(prev => [...prev, { ...DEFAULT_FORM, id: Date.now() + Math.random() }]);
-  };
-
-  const removeForm = (idToRemove) => {
-    setForms(prev => prev.filter(f => f.id !== idToRemove));
-  };
-
-  const updateForm = useCallback((id, field, value) => {
-    setForms(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
   }, []);
 
-  // ─── Submission Logic ────────────────────────────────────────────────────────
-  const handleSubmit = async () => {
-  setError("");
-  setSuccessMsg("");
+  useEffect(() => {
+    let isMounted = true;
 
-  if (selectedDesigIds.length === 0) {
-    return setError("Please select at least one Designation.");
-  }
-
-  for (let i = 0; i < forms.length; i++) {
-    const f = forms[i];
-    if (!f.fromDistance || !f.toDistance || !f.allowance || !f.applicableTo || !f.taPerKm || !f.frcCode) {
-      return setError(`Please fill all required fields in Fare Rate Card #${i + 1}`);
-    }
-  }
-
-  setIsSubmitting(true);
-  try {
-    const payload = {
-      designationIds: selectedDesigIds.map(Number),
-      rows: forms.map(({ id, ...form }) => ({
-        fromDistance: Number(form.fromDistance),
-        toDistance: Number(form.toDistance),
-        allowanceType: form.allowance,
-        applicableTo: form.applicableTo,
-        fare: Number(form.taPerKm),
-        frcCode: form.frcCode.trim(),
-        description: form.description?.trim() || ""
-      }))
+    const bootstrap = async () => {
+      setIsLoadingInitial(true);
+      clearNotifications();
+      await Promise.all([fetchDesignations(), fetchFrcRecords()]);
+      if (isMounted) {
+        setIsLoadingInitial(false);
+      }
     };
 
-    await api.post("/api/expense/frc", payload);
+    bootstrap();
 
-    setSuccessMsg("Fare Rate Cards created successfully!");
-    setForms([{ ...DEFAULT_FORM, id: Date.now() }]);
-    setSelectedDesigIds([]);
-    setTimeout(() => setSuccessMsg(""), 3500);
-    refreshTable();
-  } catch (err) {
-    setError(err.response?.data?.message || "Failed to create Fare Rate Cards.");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchDesignations, fetchFrcRecords]);
 
-  // ─── Action Handlers (Edit/Delete) ───────────────────────────────────────────
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this record?")) return;
+  const selectedDesignationNames = useMemo(() => {
+    const selected = new Set(selectedDesignationIds);
+    return designations
+      .filter((designation) => selected.has(designation.id))
+      .map((designation) => designation.name);
+  }, [designations, selectedDesignationIds]);
+
+  const updateRule = useCallback((localId, key, value) => {
+    setRules((prev) =>
+      prev.map((rule) =>
+        rule.localId === localId
+          ? {
+              ...rule,
+              [key]: value,
+            }
+          : rule
+      )
+    );
+  }, []);
+
+  const addRule = () => {
+    setRules((prev) => [...prev, createEmptyRule()]);
+  };
+
+  const removeRule = (localId) => {
+    setRules((prev) => prev.filter((rule) => rule.localId !== localId));
+  };
+
+  const validateRules = () => {
+    if (selectedDesignationIds.length === 0) {
+      return "Please select at least one designation.";
+    }
+
+    if (rules.length === 0) {
+      return "Please add at least one Fare Rate Designation card.";
+    }
+
+    for (let index = 0; index < rules.length; index += 1) {
+      const rule = rules[index];
+      const rowNo = index + 1;
+
+      const isMissingRequiredField =
+        !rule.fromDistance ||
+        !rule.toDistance ||
+        !rule.allowanceType ||
+        !rule.applicableTo ||
+        !rule.fare ||
+        !rule.frcCode ||
+        !rule.description;
+
+      if (isMissingRequiredField) {
+        return `Please fill all fields in Fare Rate Designation #${rowNo}.`;
+      }
+
+      const fromDistance = Number(rule.fromDistance);
+      const toDistance = Number(rule.toDistance);
+      const fare = Number(rule.fare);
+
+      if (Number.isNaN(fromDistance) || Number.isNaN(toDistance) || Number.isNaN(fare)) {
+        return `Distance and fare should be valid numbers in row #${rowNo}.`;
+      }
+
+      if (fromDistance < 0 || toDistance < 0 || fare < 0) {
+        return `Negative values are not allowed in row #${rowNo}.`;
+      }
+
+      if (fromDistance > toDistance) {
+        return `From distance must be less than or equal to To distance in row #${rowNo}.`;
+      }
+    }
+
+    return "";
+  };
+
+  const handleCreateFrc = async () => {
+    clearNotifications();
+    const validationMessage = validateRules();
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
+
+    setIsSubmitting(true);
+
     try {
-      // ✅ Updated to Shubham's DELETE endpoint
-      await api.delete(`/api/expense/frc/${id}`);
-      setSuccessMsg("Record deleted successfully!");
-      setTimeout(() => setSuccessMsg(""), 3500);
-      refreshTable();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete record.");
+      const rowsPayload = rules.map((rule) => ({
+        fromDistance: Number(rule.fromDistance),
+        toDistance: Number(rule.toDistance),
+        allowanceType: rule.allowanceType,
+        applicableTo: rule.applicableTo,
+        fare: Number(rule.fare),
+        frcCode: rule.frcCode.trim(),
+        description: rule.description.trim(),
+      }));
+
+      const payload = {
+        designationIds: selectedDesignationIds.map((id) => Number(id)),
+        rows: rowsPayload,
+      };
+
+      await api.post("/api/expense/frc", payload);
+
+      setSuccessMessage("Fare Rate Card created successfully.");
+      setRules([createEmptyRule()]);
+      setSelectedDesignationIds([]);
+      setShowTable(true);
+      await fetchFrcRecords({ revealTable: true });
+    } catch (error) {
+      setError(getErrorMessage(error, "Failed to create Fare Rate Card."));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const openEditModal = (row) => {
-  setEditData({
-    ...row,
-    allowance: row.allowanceType || "",
-    applicableTo: row.applicableTo || "",
-    taPerKm: row.fare || ""
-  });
-  setEditModal(true);
-};
+  const openEditModal = (record) => {
+    setEditingRecord({ ...record });
+    setIsEditModalOpen(true);
+    clearNotifications();
+  };
 
-  const handleEditSubmit = async () => {
-  if (!editData.fromDistance || !editData.toDistance || !editData.allowance || !editData.applicableTo || !editData.taPerKm || !editData.frcCode) {
-    return setError("Please fill all required fields in the edit form.");
-  }
+  const handleUpdateRecord = async () => {
+    if (!editingRecord?.id) {
+      setError("Record id is missing. Cannot update this row.");
+      return;
+    }
 
-  try {
-    const payload = {
-      fromDistance: Number(editData.fromDistance),
-      toDistance: Number(editData.toDistance),
-      allowanceType: editData.allowance,
-      applicableTo: editData.applicableTo,
-      fare: Number(editData.taPerKm),
-      frcCode: editData.frcCode.trim(),
-      description: editData.description?.trim() || ""
-    };
+    const requiredFieldsMissing =
+      !editingRecord.fromDistance ||
+      !editingRecord.toDistance ||
+      !editingRecord.allowanceType ||
+      !editingRecord.applicableTo ||
+      !editingRecord.fare ||
+      !editingRecord.frcCode ||
+      !editingRecord.description;
 
-    await api.put(`/api/expense/frc/${editData.id}`, payload);
+    if (requiredFieldsMissing) {
+      setError("Please fill all fields before updating.");
+      return;
+    }
 
-    setSuccessMsg("Record updated successfully!");
-    setTimeout(() => setSuccessMsg(""), 3500);
-    setEditModal(false);
-    refreshTable();
-  } catch (err) {
-    setError(err.response?.data?.message || "Failed to update record.");
-  }
-};
-  // ─── Derived Data ────────────────────────────────────────────────────────────
-  const desigOpts = designations.map(d => ({ id: String(d.id), label: d.name || d.designationName || "Unknown" }));
+    const fromDistance = Number(editingRecord.fromDistance);
+    const toDistance = Number(editingRecord.toDistance);
+    const fare = Number(editingRecord.fare);
 
-  const filteredData = frcList.filter(row => 
-    (row.designationName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (row.frcCode || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (row.applicableTo || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    if (Number.isNaN(fromDistance) || Number.isNaN(toDistance) || Number.isNaN(fare)) {
+      setError("Distance and fare should be valid numbers.");
+      return;
+    }
 
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
-  const pagedData = filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const goToPage = p => setCurrentPage(Math.min(Math.max(1, p), totalPages));
+    if (fromDistance > toDistance) {
+      setError("From distance must be less than or equal to To distance.");
+      return;
+    }
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+    setIsSubmitting(true);
+    clearNotifications();
+
+    try {
+      const payload = {
+        fromDistance,
+        toDistance,
+        allowanceType: editingRecord.allowanceType,
+        applicableTo: editingRecord.applicableTo,
+        fare,
+        frcCode: editingRecord.frcCode.trim(),
+        description: editingRecord.description.trim(),
+      };
+
+      await api.put(`/api/expense/frc/${editingRecord.id}`, payload);
+
+      setSuccessMessage("Fare Rate Card updated successfully.");
+      setIsEditModalOpen(false);
+      setEditingRecord(null);
+      await fetchFrcRecords({ revealTable: true });
+    } catch (error) {
+      setError(getErrorMessage(error, "Failed to update Fare Rate Card."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteRecord = async (record) => {
+    if (!record?.id) {
+      setError("Record id is missing. Cannot delete this row.");
+      return;
+    }
+
+    const shouldDelete = window.confirm("Delete this Fare Rate Card record?");
+    if (!shouldDelete) {
+      return;
+    }
+
+    clearNotifications();
+    setIsSubmitting(true);
+
+    try {
+      await api.delete(`/api/expense/frc/${record.id}`);
+      setSuccessMessage("Fare Rate Card deleted successfully.");
+      await fetchFrcRecords({ revealTable: true });
+    } catch (error) {
+      setError(getErrorMessage(error, "Failed to delete Fare Rate Card."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const filteredRecords = useMemo(() => {
+    const token = searchQuery.trim().toLowerCase();
+    if (!token) {
+      return records;
+    }
+
+    return records.filter((record) => {
+      return (
+        record.designationId.toLowerCase().includes(token) ||
+        record.designationName.toLowerCase().includes(token) ||
+        String(record.fromDistance).toLowerCase().includes(token) ||
+        String(record.toDistance).toLowerCase().includes(token) ||
+        String(record.allowanceType).toLowerCase().includes(token) ||
+        String(record.applicableTo).toLowerCase().includes(token) ||
+        String(record.fare).toLowerCase().includes(token) ||
+        String(record.frcCode).toLowerCase().includes(token) ||
+        String(record.description).toLowerCase().includes(token)
+      );
+    });
+  }, [records, searchQuery]);
+
   return (
-    <div className="space-y-5 animate-in fade-in duration-400 pb-12 font-sans">
-      
-      {/* ══ CREATION CARD ═══════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-        <div className="h-1.5 bg-gradient-to-r from-blue-600 via-blue-500 to-sky-400 rounded-t-xl" />
-        
-        <div className="px-6 sm:px-8 pt-5 pb-4 border-b border-slate-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0 border border-blue-100">
-            <Briefcase size={20} className="text-blue-600" />
+    <div className="ucr-wrap">
+      <style>{STYLES}</style>
+
+      {/* Alerts */}
+      {error && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 16px", color: "#dc2626", fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+      {successMessage && (
+        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "10px 16px", color: "#16a34a", fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <CheckCircle2 size={16} /> {successMessage}
+        </div>
+      )}
+
+      {/* Main Creation Card */}
+      <div className="ucr-card">
+        <div className="ucr-header">
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "#eff6ff", border: "1px solid #dbeafe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Briefcase size={17} style={{ color: "#2563eb" }} />
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">Fare Rate Card Designation</h2>
-            <p className="text-xs font-medium text-slate-400">Create multiple FRC rules per designation</p>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0 }}>Fare Rate Card Designation</h2>
+            <p style={{ fontSize: 11, color: "#6b7280", margin: 0, marginTop: 2 }}>
+              Create multiple fare slabs and map them to one or more designations
+            </p>
           </div>
         </div>
 
-        <div className="p-6 sm:p-8 space-y-6">
-          {error && (
-            <div className="flex items-center gap-2.5 bg-red-50 text-red-600 px-4 py-3 rounded-lg border border-red-100 text-sm font-medium">
-              <AlertCircle size={16} /> {error}
-            </div>
-          )}
-          {successMsg && (
-            <div className="flex items-center gap-2.5 bg-blue-50 text-blue-700 px-4 py-3 rounded-lg border border-blue-100 text-sm font-medium">
-              <CheckCircle2 size={16} /> {successMsg}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="md:col-span-1">
-              <MultiDropdown
+        <div className="ucr-body">
+          <div className="ucr-grid" style={{ marginBottom: 32 }}>
+            <div style={{ position: "relative", zIndex: 50 }}>
+              <MultiSelectDropdown
                 label="SELECT DESIGNATION *"
-                icon={Briefcase}
-                options={desigOpts}
-                selectedIds={selectedDesigIds}
-                onChange={setSelectedDesigIds}
+                options={designations.map((designation) => ({
+                  value: designation.id,
+                  label: designation.name,
+                }))}
+                selectedValues={selectedDesignationIds}
+                onChange={setSelectedDesignationIds}
+                disabled={isLoadingInitial}
               />
+            </div>
+            <div className="col-span-2" style={{ display: "flex", alignItems: "center" }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", margin: 0 }}>
+                Selected: {selectedDesignationNames.length > 0 ? selectedDesignationNames.join(", ") : "None"}
+              </p>
             </div>
           </div>
 
-          <div className="space-y-6">
-            {forms.map((form, index) => (
-              <div key={form.id} className="relative bg-slate-50/40 rounded-xl border border-slate-200 p-6 pt-10 transition-all hover:border-blue-200">
-                
-                <div className="absolute -top-3 left-6 bg-white border border-slate-200 px-4 py-1.5 rounded-full text-[11px] font-bold text-blue-600 shadow-sm uppercase tracking-widest flex items-center gap-1.5">
-                  <MapPin size={12} /> Fare Rate Form #{index + 1}
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {rules.map((rule, index) => (
+              <div
+                key={rule.localId}
+                style={{
+                  background: "#f9fafb",
+                  border: "1px solid #f3f4f6",
+                  borderRadius: 12,
+                  padding: "24px 20px 20px 20px",
+                  position: "relative",
+                }}
+              >
+                <div style={{
+                  position: "absolute", top: -10, left: 16, background: "#fff", border: "1px solid #f3f4f6",
+                  padding: "2px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, color: "#2563eb", textTransform: "uppercase"
+                }}>
+                  Fare Rate Designation #{index + 1}
                 </div>
 
-                {forms.length > 1 && (
-                  <button 
-                    onClick={() => removeForm(form.id)} 
-                    className="absolute top-4 right-4 text-slate-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg border border-transparent hover:border-red-100 transition-all duration-200"
-                    title="Remove Form"
+                {rules.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeRule(rule.localId)}
+                    style={{
+                      position: "absolute", right: 12, top: 12, width: 30, height: 30, borderRadius: 8,
+                      border: "1px solid #fecaca", background: "#fff", color: "#dc2626", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center"
+                    }}
+                    title="Delete this card"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={14} />
                   </button>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                  <FloatingInput label="FROM DISTANCE (KM) *" type="number" value={form.fromDistance} onChange={(e) => updateForm(form.id, "fromDistance", e.target.value)} />
-                  <FloatingInput label="TO DISTANCE (KM) *" type="number" value={form.toDistance} onChange={(e) => updateForm(form.id, "toDistance", e.target.value)} />
-                  <Dropdown label="ALLOWANCE TO BE GET *" options={ALLOWANCE_OPTIONS} value={form.allowance} onSelect={(val) => updateForm(form.id, "allowance", val)} />
-                  <Dropdown label="SELECT APPLICABLE TO *" options={APPLICABLE_OPTIONS} value={form.applicableTo} onSelect={(val) => updateForm(form.id, "applicableTo", val)} />
-                  
-                  <FloatingInput label="ENTER TA PER KM *" type="number" value={form.taPerKm} onChange={(e) => updateForm(form.id, "taPerKm", e.target.value)} />
-                  <FloatingInput label="ENTER FRC CODE *" value={form.frcCode} onChange={(e) => updateForm(form.id, "frcCode", e.target.value)} />
-                  <div className="sm:col-span-2">
-                    <FloatingInput label="ENTER DESCRIPTION" value={form.description} onChange={(e) => updateForm(form.id, "description", e.target.value)} />
+                <div className="ucr-grid-4" style={{ marginBottom: 0, marginTop: rules.length > 1 ? 8 : 0 }}>
+                  <FloatingInput
+                    label="FROM DISTANCE (KM) *"
+                    type="number"
+                    value={rule.fromDistance}
+                    onChange={(event) => updateRule(rule.localId, "fromDistance", event.target.value)}
+                  />
+
+                  <FloatingInput
+                    label="TO DISTANCE (KM) *"
+                    type="number"
+                    value={rule.toDistance}
+                    onChange={(event) => updateRule(rule.localId, "toDistance", event.target.value)}
+                  />
+
+                  <FloatingDropdown
+                    label="ALLOWANCE TO BE GET *"
+                    options={ALLOWANCE_OPTIONS}
+                    value={rule.allowanceType}
+                    onSelect={(value) => updateRule(rule.localId, "allowanceType", value)}
+                  />
+
+                  <FloatingDropdown
+                    label="SELECT APPLICABLE TO *"
+                    options={APPLICABLE_OPTIONS}
+                    value={rule.applicableTo}
+                    onSelect={(value) => updateRule(rule.localId, "applicableTo", value)}
+                  />
+
+                  <FloatingInput
+                    label="ENTER TA PER KM *"
+                    type="number"
+                    value={rule.fare}
+                    onChange={(event) => updateRule(rule.localId, "fare", event.target.value)}
+                  />
+
+                  <FloatingInput
+                    label="ENTER FRC CODE *"
+                    value={rule.frcCode}
+                    onChange={(event) => updateRule(rule.localId, "frcCode", event.target.value)}
+                  />
+
+                  <div className="col-span-2">
+                    <FloatingTextarea
+                      label="ENTER DESCRIPTION *"
+                      value={rule.description}
+                      onChange={(event) => updateRule(rule.localId, "description", event.target.value)}
+                    />
                   </div>
                 </div>
               </div>
             ))}
           </div>
+        </div>
 
-          <div className="flex items-center gap-4 pt-2">
-            <button onClick={addForm} className="w-10 h-10 bg-white hover:bg-blue-50 text-blue-600 border border-blue-200 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-sm" title="Add another form">
-              <Plus size={20} strokeWidth={2.5} />
-            </button>
-            <button onClick={handleSubmit} disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              Create FRC
-            </button>
-          </div>
+        <div className="ucr-footer" style={{ justifyContent: "flex-start" }}>
+          <button
+            type="button"
+            onClick={addRule}
+            style={{
+              width: 40, height: 40, borderRadius: "50%", background: "#fff", border: "1px solid #dbeafe",
+              color: "#2563eb", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+            }}
+            title="Add one more Fare Rate Designation"
+          >
+            <Plus size={20} />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCreateFrc}
+            disabled={isSubmitting || isLoadingInitial}
+            style={{
+              height: 40, padding: "0 24px", borderRadius: 8, background: "#2563eb", color: "#fff",
+              fontSize: 13, fontWeight: 700, border: "none", cursor: (isSubmitting || isLoadingInitial) ? "not-allowed" : "pointer",
+              opacity: (isSubmitting || isLoadingInitial) ? 0.6 : 1, display: "flex", alignItems: "center", gap: 8
+            }}
+          >
+            {isSubmitting ? <Loader2 size={16} style={{ animation: "ucr-spin 1s linear infinite" }} /> : <Save size={16} />}
+            Create FRC
+          </button>
         </div>
       </div>
 
-      {/* ══ DATA TABLE ═════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between gap-4 items-center bg-white">
-          <div className="flex items-center gap-3">
-            <h3 className="text-base font-bold text-slate-800">Existing Fare Rate Cards</h3>
-            <span className="bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold px-2.5 py-1 rounded-md">
-              {filteredData.length} Total
-            </span>
-          </div>
-          
-          <div className="relative w-full sm:w-72">
-            <input type="text" placeholder="Search FRC Code, Designation..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              className="w-full h-10 border-2 border-slate-200 focus:border-blue-500 rounded-lg pl-4 pr-9 text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition-all" />
-            <Search size={16} className="absolute right-3 top-3 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left min-w-[1000px]">
-            <thead className="bg-blue-600 text-white text-[11px] uppercase tracking-wider font-semibold border-b border-blue-700">
-              <tr>
-                <th className="py-4 px-5 text-center w-12">#</th>
-                <th className="py-4 px-5">Designation</th>
-                <th className="py-4 px-5">From Dist</th>
-                <th className="py-4 px-5">To Dist</th>
-                <th className="py-4 px-5">Allowance</th>
-                <th className="py-4 px-5 text-center">Applicable To</th>
-                <th className="py-4 px-5 text-right">Fare (TA/KM)</th>
-                <th className="py-4 px-5">FRC Code</th>
-                <th className="py-4 px-5">Description</th>
-                <th className="py-4 px-5 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
-                <tr><td colSpan="10" className="py-16 text-center"><Loader2 className="animate-spin inline text-blue-500" size={32} /></td></tr>
-              ) : pagedData.length === 0 ? (
-                <tr><td colSpan="10" className="py-12 text-center text-slate-400 font-medium">No Fare Rate Cards found.</td></tr>
-              ) : pagedData.map((row, i) => (
-                <tr key={row.id} className="transition-colors hover:bg-blue-50/30 bg-white">
-                  <td className="py-4 px-5 text-center text-slate-400 font-medium text-xs">{(currentPage - 1) * pageSize + i + 1}</td>
-                  <td className="py-4 px-5 font-bold text-slate-700">{row.designationName || "—"}</td>
-                  <td className="py-4 px-5 text-slate-600">{row.fromDistance} km</td>
-                  <td className="py-4 px-5 text-slate-600">{row.toDistance} km</td>
-                  <td className="py-4 px-5">
-  <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded text-xs font-semibold text-slate-600">
-    {row.allowanceType || "—"}
-  </span>
-</td>
-                  <td className="py-4 px-5 text-center font-black uppercase text-blue-600">{row.applicableTo}</td>
-                  <td className="py-4 px-5 text-right font-mono font-bold text-slate-800">
-  {row.fare != null ? "₹" + row.fare : "—"}
-</td>
-                  <td className="py-4 px-5 font-semibold text-slate-700">{row.frcCode}</td>
-                  <td className="py-4 px-5 text-slate-500 truncate max-w-[150px] text-xs">{row.description || "—"}</td>
-                  <td className="py-4 px-5">
-                    <div className="flex justify-center items-center gap-2">
-                      <button onClick={() => openEditModal(row)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95" title="Edit"><Edit size={14}/></button>
-                      <button onClick={() => handleDelete(row.id)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all active:scale-95" title="Delete"><Trash2 size={14}/></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 bg-slate-50/50 border-t border-slate-100">
-          <div className="text-xs text-slate-500 font-medium">
-            Showing <span className="font-bold text-slate-700">{pagedData.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to <span className="font-bold text-slate-700">{Math.min(currentPage * pageSize, filteredData.length)}</span> of <span className="font-bold text-slate-700">{filteredData.length}</span> entries
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => goToPage(1)} disabled={currentPage === 1} className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">First</button>
-            <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Prev</button>
-            <div className="px-3.5 py-1.5 text-xs font-bold bg-blue-600 text-white rounded shadow-sm border border-blue-600">{currentPage}</div>
-            <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Next</button>
-            <button onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages} className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Last</button>
-          </div>
-        </div>
-      </div>
-
-      {/* ══ EDIT MODAL ════════════════════════════════════════════════════ */}
-      {editModal && editData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="bg-blue-600 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-white font-bold flex items-center gap-2 text-sm uppercase tracking-wider"><Edit size={16}/> Edit Fare Rate Card</h3>
-              <button onClick={() => setEditModal(false)} className="text-white/70 hover:text-white transition-colors"><X size={20}/></button>
+      {/* Table Section */}
+      {showTable && (
+        <div className="ucr-card">
+          <div className="ucr-header" style={{ justifyContent: "space-between", background: "#f9fafb" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: "#374151", margin: 0 }}>Fare Rate Card Entries</h3>
+            <div style={{ position: "relative", width: 280, maxWidth: "100%" }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search designation, code..."
+                style={{
+                  width: "100%", height: 36, borderRadius: 8, border: "1px solid #d1d5db",
+                  padding: "0 32px 0 12px", fontSize: 13, outline: "none", color: "#111827"
+                }}
+              />
+              <Search size={14} style={{ position: "absolute", right: 10, top: 11, color: "#9ca3af" }} />
             </div>
-            
-            <div className="p-6 sm:p-8 grid grid-cols-1 sm:grid-cols-2 gap-5 bg-white">
-              <div className="sm:col-span-2">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Designation</label>
-                <div className={`w-full ${INPUT_CLASS} rounded-lg border-2 border-slate-200 bg-slate-50 pl-4 flex items-center text-sm font-semibold text-slate-700 mt-1`}>
-                  {editData.designationName || "—"}
+          </div>
+
+          <div className="ucr-body" style={{ padding: 0 }}>
+            <div className="ucr-table-container" style={{ border: "none", borderRadius: "0 0 16px 16px" }}>
+              <table className="ucr-table">
+                <thead>
+                  <tr>
+                    <th>S.No.</th>
+                    <th>Designation</th>
+                    <th>Name</th>
+                    <th>From Distance</th>
+                    <th>To Distance</th>
+                    <th>Allowance To Be Get</th>
+                    <th>Applicable To</th>
+                    <th>Fare</th>
+                    <th>Description</th>
+                    <th>FRC Code</th>
+                    <th style={{ textAlign: "center" }}>Edit / Delete</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isTableLoading ? (
+                    <tr>
+                      <td colSpan={11} style={{ textAlign: "center", padding: 40 }}>
+                        <Loader2 style={{ animation: "ucr-spin 1s linear infinite", margin: "0 auto", color: "#2563eb" }} size={24} />
+                      </td>
+                    </tr>
+                  ) : filteredRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+                        No fare rate card data found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRecords.map((record, index) => (
+                      <tr key={record.id}>
+                        <td style={{ color: "#6b7280" }}>{index + 1}</td>
+                        <td style={{ fontWeight: 600 }}>{record.designationId || "-"}</td>
+                        <td style={{ fontWeight: 600 }}>{record.designationName || "-"}</td>
+                        <td>{record.fromDistance}</td>
+                        <td>{record.toDistance}</td>
+                        <td>{record.allowanceType}</td>
+                        <td style={{ color: "#2563eb", fontWeight: 700, textTransform: "uppercase" }}>{record.applicableTo}</td>
+                        <td style={{ fontWeight: 700 }}>{record.fare}</td>
+                        <td style={{ maxWidth: 200, whiteSpace: "normal", wordBreak: "break-word" }}>{record.description || "-"}</td>
+                        <td style={{ fontWeight: 600 }}>{record.frcCode}</td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(record)}
+                              style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", padding: 4 }}
+                              title="Edit"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRecord(record)}
+                              style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", padding: 4 }}
+                              title="Delete"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal (Mobile Responsive) */}
+      {isEditModalOpen && editingRecord && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000, background: "rgba(17, 24, 39, 0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 16
+        }}>
+          <div className="ucr-card" style={{ 
+            width: "100%", maxWidth: 800, margin: 0, overflow: "visible", 
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+            maxHeight: "90vh", display: "flex", flexDirection: "column"
+          }}>
+            <div className="ucr-header" style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "#eff6ff", border: "1px solid #dbeafe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Edit2 size={17} style={{ color: "#2563eb" }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0, textTransform: "uppercase" }}>Edit Fare Rate Card</h2>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingRecord(null);
+                }}
+                style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 4, borderRadius: 6 }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="ucr-body" style={{ overflowY: "auto", flex: 1 }}>
+              <div className="ucr-grid-4" style={{ marginBottom: 0 }}>
+                <div className="col-span-2">
+                  <FloatingInput
+                    label="DESIGNATION NAME"
+                    value={editingRecord.designationName}
+                    onChange={(event) =>
+                      setEditingRecord((prev) => ({ ...prev, designationName: event.target.value }))
+                    }
+                    disabled
+                  />
+                </div>
+
+                <FloatingInput
+                  label="FROM DISTANCE (KM) *"
+                  type="number"
+                  value={editingRecord.fromDistance}
+                  onChange={(event) =>
+                    setEditingRecord((prev) => ({ ...prev, fromDistance: event.target.value }))
+                  }
+                />
+
+                <FloatingInput
+                  label="TO DISTANCE (KM) *"
+                  type="number"
+                  value={editingRecord.toDistance}
+                  onChange={(event) =>
+                    setEditingRecord((prev) => ({ ...prev, toDistance: event.target.value }))
+                  }
+                />
+
+                <FloatingDropdown
+                  label="ALLOWANCE TO BE GET *"
+                  options={ALLOWANCE_OPTIONS}
+                  value={editingRecord.allowanceType}
+                  onSelect={(value) =>
+                    setEditingRecord((prev) => ({ ...prev, allowanceType: value }))
+                  }
+                />
+
+                <FloatingDropdown
+                  label="SELECT APPLICABLE TO *"
+                  options={APPLICABLE_OPTIONS}
+                  value={editingRecord.applicableTo}
+                  onSelect={(value) =>
+                    setEditingRecord((prev) => ({ ...prev, applicableTo: value }))
+                  }
+                />
+
+                <FloatingInput
+                  label="ENTER TA PER KM *"
+                  type="number"
+                  value={editingRecord.fare}
+                  onChange={(event) =>
+                    setEditingRecord((prev) => ({ ...prev, fare: event.target.value }))
+                  }
+                />
+
+                <FloatingInput
+                  label="ENTER FRC CODE *"
+                  value={editingRecord.frcCode}
+                  onChange={(event) =>
+                    setEditingRecord((prev) => ({ ...prev, frcCode: event.target.value }))
+                  }
+                />
+
+                <div className="col-span-4">
+                  <FloatingTextarea
+                    label="ENTER DESCRIPTION *"
+                    value={editingRecord.description}
+                    onChange={(event) =>
+                      setEditingRecord((prev) => ({ ...prev, description: event.target.value }))
+                    }
+                  />
                 </div>
               </div>
-              <FloatingInput label="FROM DISTANCE (KM) *" type="number" value={editData.fromDistance} onChange={e => setEditData({...editData, fromDistance: e.target.value})} />
-              <FloatingInput label="TO DISTANCE (KM) *" type="number" value={editData.toDistance} onChange={e => setEditData({...editData, toDistance: e.target.value})} />
-              <Dropdown label="ALLOWANCE TO BE GET *" options={ALLOWANCE_OPTIONS} value={editData.allowance} onSelect={v => setEditData({...editData, allowance: v})} />
-              <Dropdown label="SELECT APPLICABLE TO *" options={APPLICABLE_OPTIONS} value={editData.applicableTo} onSelect={v => setEditData({...editData, applicableTo: v})} />
-              <FloatingInput label="ENTER TA PER KM *" type="number" value={editData.taPerKm} onChange={e => setEditData({...editData, taPerKm: e.target.value})} />
-              <FloatingInput label="ENTER FRC CODE *" value={editData.frcCode} onChange={e => setEditData({...editData, frcCode: e.target.value})} />
-              <div className="sm:col-span-2">
-                <FloatingInput label="ENTER DESCRIPTION" value={editData.description} onChange={e => setEditData({...editData, description: e.target.value})} />
-              </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-              <button onClick={() => setEditModal(false)} className="px-6 py-2.5 border-2 border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-white transition-all active:scale-95">Cancel</button>
-              <button onClick={handleEditSubmit} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-2 shadow-sm shadow-blue-100 transition-all active:scale-95">
-                <Save size={16}/> Update Record
+            <div className="ucr-footer" style={{ borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingRecord(null);
+                }}
+                style={{
+                  height: 38, padding: "0 20px", borderRadius: 8, background: "#fff",
+                  border: "1px solid #d1d5db", color: "#4b5563", fontWeight: 600, fontSize: 13, cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdateRecord}
+                disabled={isSubmitting}
+                style={{
+                  height: 38, padding: "0 20px", borderRadius: 8, background: "#2563eb", color: "#fff",
+                  fontSize: 13, fontWeight: 700, border: "none", cursor: isSubmitting ? "not-allowed" : "pointer",
+                  opacity: isSubmitting ? 0.6 : 1, display: "flex", alignItems: "center", gap: 8
+                }}
+              >
+                {isSubmitting ? <Loader2 size={16} style={{ animation: "ucr-spin 1s linear infinite" }} /> : <Save size={16} />}
+                Update
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Helper Components (Styled to perfectly match the sleek blue theme)
+// UI Components Restyled to match Reference FSelect (Mobile Fixed)
 // ═══════════════════════════════════════════════════════════════════
 
-const FloatingInput = React.memo(({ label, type = "text", value, onChange }) => {
+function FloatingInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  disabled = false,
+}) {
   const [isFocused, setIsFocused] = useState(false);
-  const hasValue = Boolean(value !== "" && value !== null);
-  const labelPos = hasValue || isFocused ? "-top-[9px] text-[10px] bg-white px-1" : "top-[9px] text-sm bg-transparent";
-  const labelColor = hasValue || isFocused ? "text-blue-600 font-bold" : "text-slate-400 font-semibold";
-  const borderCls = hasValue ? isFocused ? "border-blue-500 ring-2 ring-blue-100" : "border-blue-400" : isFocused ? "border-slate-400 ring-2 ring-slate-100" : "border-slate-300";
+  const hasValue = value !== "" && value !== null && value !== undefined;
+  const active = hasValue || isFocused;
 
   return (
-    <div className="relative w-full select-none mt-1">
-      <input type={type} value={value || ""} onChange={onChange} onFocus={() => setIsFocused(true)} onBlur={() => setIsFocused(false)}
-        className={`w-full ${INPUT_CLASS} rounded-lg border-2 bg-white pl-3.5 pr-4 transition-all focus:outline-none text-sm font-semibold text-slate-800 ${borderCls}`} />
-      <label className={`absolute left-3 pointer-events-none z-10 transition-all duration-200 tracking-wide ${labelPos} ${labelColor}`}>
+    <div style={{ position: "relative", width: "100%" }}>
+      <input
+        type={type}
+        value={value ?? ""}
+        onChange={onChange}
+        disabled={disabled}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 12px", fontSize: 13,
+          border: `1.5px solid ${active && !disabled ? "#2563eb" : "#d1d5db"}`, outline: "none",
+          fontWeight: 600, color: disabled ? "#6b7280" : "#111827",
+          background: disabled ? "#f3f4f6" : "#fff",
+          transition: "border-color 0.2s"
+        }}
+      />
+      <label
+        style={{
+          position: "absolute", left: 10, top: active ? -9 : 12, fontSize: active ? 10 : 12,
+          fontWeight: 600, color: disabled ? "#9ca3af" : (active ? "#2563eb" : "#9ca3af"),
+          background: disabled ? (active ? "#f3f4f6" : "transparent") : "#fff",
+          padding: "0 4px", transition: "0.2s", pointerEvents: "none",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "calc(100% - 20px)"
+        }}
+      >
         {label}
       </label>
     </div>
   );
-});
+}
 
-function Dropdown({ label, value, onSelect, options = [], icon: Icon }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
-  const ref = useRef(null);
-
-  const openMenu = () => {
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
-    setIsOpen(true);
-  };
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const close = () => setIsOpen(false);
-    document.addEventListener("mousedown", close);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => { document.removeEventListener("mousedown", close); window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
-  }, [isOpen]);
-
-  const selected = options.find(o => String(o.value) === String(value));
-  const hasValue = Boolean(value !== "" && value !== null && value !== undefined);
-  
-  const borderCls = hasValue ? isOpen ? "border-blue-500 ring-2 ring-blue-100" : "border-blue-400" : isOpen ? "border-slate-400 ring-2 ring-slate-100" : "border-slate-300";
-  const labelColor = hasValue ? "text-blue-600 font-bold" : isOpen ? "text-slate-500 font-bold" : "text-slate-400 font-semibold";
-  const labelPos = hasValue || isOpen ? "-top-[9px] text-[10px] bg-white px-1" : "top-[9px] text-sm bg-transparent";
+function FloatingTextarea({ label, value, onChange }) {
+  const [isFocused, setIsFocused] = useState(false);
+  const hasValue = value !== "" && value !== null && value !== undefined;
+  const active = hasValue || isFocused;
 
   return (
-    <div className="relative w-full select-none mt-1">
-      <div ref={ref} onClick={openMenu} className={`w-full ${INPUT_CLASS} rounded-lg border-2 bg-white pl-3.5 pr-10 flex items-center transition-all cursor-pointer ${borderCls}`}>
-        <span className={`truncate text-sm font-semibold flex-1 ${hasValue ? "text-slate-800" : "text-transparent"}`}>{selected?.label || " "}</span>
-        <div className={`absolute right-3 flex items-center gap-1 pointer-events-none transition-transform duration-200 ${hasValue ? "text-blue-500" : "text-slate-400"} ${isOpen ? "rotate-180" : ""}`}>
-          {Icon && <Icon size={14} className="opacity-70" />}
-          <ChevronDown size={14} />
-        </div>
+    <div style={{ position: "relative", width: "100%" }}>
+      <textarea
+        value={value ?? ""}
+        onChange={onChange}
+        rows={2}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        style={{
+          width: "100%", minHeight: 60, borderRadius: 8, padding: "12px", fontSize: 13,
+          border: `1.5px solid ${active ? "#2563eb" : "#d1d5db"}`, outline: "none",
+          fontWeight: 600, color: "#111827", background: "#fff",
+          transition: "border-color 0.2s", resize: "vertical", fontFamily: "inherit"
+        }}
+      />
+      <label
+        style={{
+          position: "absolute", left: 10, top: active ? -9 : 12, fontSize: active ? 10 : 12,
+          fontWeight: 600, color: active ? "#2563eb" : "#9ca3af", background: "#fff",
+          padding: "0 4px", transition: "0.2s", pointerEvents: "none",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "calc(100% - 20px)"
+        }}
+      >
+        {label}
+      </label>
+    </div>
+  );
+}
+
+function FloatingDropdown({ label, options, value, onSelect }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef(null);
+
+  const selectedOption = options.find((option) => String(option.value) === String(value));
+  const active = isOpen || Boolean(value);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: "relative", width: "100%" }}>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 12px", fontSize: 13, display: "flex",
+          alignItems: "center", border: `1.5px solid ${active ? "#2563eb" : "#d1d5db"}`, cursor: "pointer",
+          background: "#fff", transition: "border-color 0.2s"
+        }}
+      >
+        <span style={{ flex: 1, fontWeight: 600, color: value ? "#111827" : "transparent", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginRight: 8 }}>
+          {selectedOption?.label || " "}
+        </span>
+        <ChevronDown size={14} style={{ color: "#9ca3af", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s", flexShrink: 0 }} />
       </div>
-      <label className={`absolute left-3 pointer-events-none z-10 transition-all duration-200 tracking-wide ${labelPos} ${labelColor}`}>{label}</label>
+      <label
+        style={{
+          position: "absolute", left: 10, top: active ? -9 : 12, fontSize: active ? 10 : 12,
+          fontWeight: 600, color: active ? "#2563eb" : "#9ca3af", background: "#fff",
+          padding: "0 4px", transition: "0.2s", pointerEvents: "none",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "calc(100% - 20px)"
+        }}
+      >
+        {label}
+      </label>
 
       {isOpen && (
-        <Portal top={pos.top} left={pos.left} width={pos.width} onClose={() => setIsOpen(false)}>
-          <ul className="py-1.5 max-h-60 overflow-y-auto">
-            {options.map((opt, i) => (
-              <li key={i} onMouseDown={e => { e.preventDefault(); onSelect(opt.value); setIsOpen(false); }}
-                className={`px-4 py-3 text-sm cursor-pointer font-semibold transition-colors ${String(value) === String(opt.value) ? "bg-blue-50 text-blue-600 border-l-[3px] border-blue-500" : "text-slate-600 hover:bg-slate-50 hover:text-blue-600 border-l-[3px] border-transparent"}`}>
-                {opt.label}
-              </li>
-            ))}
-          </ul>
-        </Portal>
+        <div
+          style={{
+            position: "absolute", top: "110%", left: 0, width: "100%", background: "#fff",
+            border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)", zIndex: 100
+          }}
+        >
+          {options.map((opt) => (
+            <div
+              key={opt.value}
+              onClick={() => { onSelect(opt.value); setIsOpen(false); }}
+              style={{
+                padding: "10px 12px", fontSize: 13, cursor: "pointer", fontWeight: 600,
+                background: String(value) === String(opt.value) ? "#eff6ff" : "transparent",
+                color: String(value) === String(opt.value) ? "#2563eb" : "#374151"
+              }}
+            >
+              {opt.label}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-function MultiDropdown({ label, options = [], selectedIds, onChange, icon: Icon }) {
+function MultiSelectDropdown({ label, options, selectedValues, onChange, disabled = false }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const ref = useRef(null);
 
-  const openMenu = () => {
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
-    setIsOpen(true);
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const toggleValue = (value) => {
+    if (selectedValues.includes(value)) {
+      onChange(selectedValues.filter((item) => item !== value));
+      return;
+    }
+    onChange([...selectedValues, value]);
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const close = () => setIsOpen(false);
-    document.addEventListener("mousedown", close);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => { document.removeEventListener("mousedown", close); window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
-  }, [isOpen]);
-
-  const toggle = id => onChange(selectedIds.includes(id) ? selectedIds.filter(i => i !== id) : [...selectedIds, id]);
-  const selectAll = () => onChange(options.map(o => o.id));
+  const selectAll = () => onChange(options.map((option) => option.value));
   const clearAll = () => onChange([]);
 
-  const hasValue = selectedIds.length > 0;
-  const displayText = hasValue ? options.filter(o => selectedIds.includes(o.id)).map(o => o.label).join(", ") : "";
-  
-  const borderCls = hasValue ? isOpen ? "border-blue-500 ring-2 ring-blue-100" : "border-blue-400" : isOpen ? "border-slate-400 ring-2 ring-slate-100" : "border-slate-300";
-  const labelColor = hasValue ? "text-blue-600 font-bold" : isOpen ? "text-slate-500 font-bold" : "text-slate-400 font-semibold";
-  const labelPos = hasValue || isOpen ? "-top-[9px] text-[10px] bg-white px-1" : "top-[9px] text-sm bg-transparent";
+  const selectedLabel = options
+    .filter((option) => selectedValues.includes(option.value))
+    .map((option) => option.label)
+    .join(", ");
+
+  const hasValue = selectedValues.length > 0;
+  const active = isOpen || hasValue;
 
   return (
-    <div className="relative w-full select-none mt-1">
-      <div ref={ref} onClick={openMenu} className={`w-full ${INPUT_CLASS} rounded-lg border-2 bg-white pl-3.5 pr-10 flex items-center transition-all cursor-pointer ${borderCls}`}>
-        <span className={`block truncate text-sm font-semibold flex-1 min-w-0 ${hasValue ? "text-slate-800" : "text-transparent"}`}>{displayText || " "}</span>
-        <div className={`absolute right-3 flex items-center gap-1 pointer-events-none transition-transform duration-200 ${hasValue ? "text-blue-500" : "text-slate-400"} ${isOpen ? "rotate-180" : ""}`}>
-          {Icon && <Icon size={14} className="opacity-70" />}
-          <ChevronDown size={14} />
-        </div>
+    <div ref={ref} style={{ position: "relative", width: "100%" }}>
+      <div
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 12px", fontSize: 13, display: "flex",
+          alignItems: "center", border: `1.5px solid ${active && !disabled ? "#2563eb" : "#d1d5db"}`,
+          cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#f3f4f6" : "#fff",
+          transition: "border-color 0.2s"
+        }}
+      >
+        <span style={{ flex: 1, fontWeight: 600, color: hasValue ? "#111827" : "transparent", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginRight: 8 }}>
+          {selectedLabel || " "}
+        </span>
+        <ChevronDown size={14} style={{ color: "#9ca3af", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s", flexShrink: 0 }} />
       </div>
-      <label className={`absolute left-3 pointer-events-none z-10 transition-all duration-200 tracking-wide ${labelPos} ${labelColor}`}>{label}</label>
+      <label
+        style={{
+          position: "absolute", left: 10, top: active ? -9 : 12, fontSize: active ? 10 : 12,
+          fontWeight: 600, color: disabled ? "#9ca3af" : (active ? "#2563eb" : "#9ca3af"), background: disabled ? (active ? "#f3f4f6" : "transparent") : "#fff",
+          padding: "0 4px", transition: "0.2s", pointerEvents: "none",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "calc(100% - 20px)"
+        }}
+      >
+        {label}
+      </label>
 
-      {isOpen && (
-        <Portal top={pos.top} left={pos.left} width={pos.width} onClose={() => setIsOpen(false)}>
-          <div className="flex border-b border-slate-100">
-            <button type="button" onMouseDown={e => { e.preventDefault(); selectAll(); }} className="flex-1 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors">Select All</button>
-            <button type="button" onMouseDown={e => { e.preventDefault(); clearAll(); }} className="flex-1 py-2.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">Clear All</button>
+      {isOpen && !disabled && (
+        <div
+          style={{
+            position: "absolute", top: "110%", left: 0, width: "100%", background: "#fff",
+            border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)", zIndex: 100, overflow: "hidden"
+          }}
+        >
+          {/* Strictly retaining exact Select All / Clear All design translated to inline css */}
+          <div style={{ display: "flex", borderBottom: "1px solid #f3f4f6" }}>
+            <button
+              type="button"
+              onClick={selectAll}
+              style={{ flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 700, color: "#fff", background: "#2563eb", border: "none", cursor: "pointer" }}
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              style={{ flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 700, color: "#fff", background: "#ef4444", border: "none", cursor: "pointer" }}
+            >
+              Clear All
+            </button>
           </div>
-          <ul className="py-1.5 max-h-52 overflow-y-auto">
-            {options.map((opt, idx) => {
-              const isSel = selectedIds.includes(opt.id);
-              return (
-                <li key={opt.id ?? idx} onMouseDown={e => { e.preventDefault(); toggle(opt.id); }} className={`px-4 py-2.5 text-sm cursor-pointer flex items-center gap-3 transition-colors ${isSel ? "bg-blue-50" : "hover:bg-slate-50"}`}>
-                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${isSel ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}>
-                    {isSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                  </div>
-                  <span className={`font-semibold ${isSel ? "text-blue-700" : "text-slate-600"}`}>{opt.label}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </Portal>
-      )}
-    </div>
-  );
-}
 
-function Portal({ top, left, width, onClose, children }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const h = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-      document.addEventListener("mousedown", h);
-      return () => document.removeEventListener("mousedown", h);
-    }, 10);
-    return () => clearTimeout(t);
-  }, [onClose]);
-  return (
-    <div ref={ref} style={{ position: "fixed", top, left, width, zIndex: 9999 }} className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-      {children}
+          <div style={{ maxHeight: 200, overflowY: "auto", padding: "4px 0" }}>
+            {options.length === 0 ? (
+              <p style={{ padding: "12px 16px", fontSize: 13, color: "#9ca3af", margin: 0 }}>No designation available.</p>
+            ) : (
+              options.map((option) => {
+                const isSelected = selectedValues.includes(option.value);
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => toggleValue(option.value)}
+                    style={{
+                      width: "100%", textAlign: "left", padding: "10px 16px", fontSize: 13, fontWeight: 600,
+                      display: "flex", alignItems: "center", gap: 10, background: isSelected ? "#eff6ff" : "transparent",
+                      color: isSelected ? "#2563eb" : "#4b5563", border: "none", cursor: "pointer"
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 16, height: 16, borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                        border: isSelected ? "2px solid #2563eb" : "2px solid #d1d5db", background: isSelected ? "#2563eb" : "#fff"
+                      }}
+                    >
+                      {isSelected && (
+                        <svg viewBox="0 0 10 8" style={{ width: 10, height: 8 }} fill="none">
+                          <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    {option.label}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

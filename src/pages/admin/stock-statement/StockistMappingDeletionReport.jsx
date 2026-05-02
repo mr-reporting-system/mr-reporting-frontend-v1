@@ -1,11 +1,60 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Loader2, AlertCircle, CheckCircle2, ChevronDown, Check,
-  Filter, Trash2, Map, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
+  Map, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from "lucide-react";
 import api from "../../../services/api";
 
-const INPUT_CLASS = "h-[38px]";
+// ─── Global responsive styles (from reference) ───────────────────────────────
+const STYLES = `
+  *, *::before, *::after { box-sizing: border-box; }
+  .ucr-wrap  { width:100%; padding-bottom:48px; font-family:Inter,sans-serif; overflow-x: hidden; }
+  .ucr-card  { background:#fff; border-radius:16px; box-shadow:0 1px 4px rgba(0,0,0,0.07); border:1px solid #f3f4f6; overflow:visible; margin-bottom: 24px; min-width: 0; }
+  .ucr-header{ padding:16px 20px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:12px; }
+  .ucr-body  { padding:24px; }
+  .ucr-footer{ padding:14px 24px; background:#f9fafb; border-top:1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between; border-radius:0 0 16px 16px; flex-wrap: wrap; gap: 12px; }
+
+  /* Responsive Table Scroll Logic */
+  .ucr-table-container {
+    border: 1px solid #f3f4f6;
+    border-radius: 12px;
+    overflow-x: auto;
+    background: #fff;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+  .ucr-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+  .ucr-table thead { background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
+  .ucr-table th { padding: 12px 16px; text-align: left; font-weight: 700; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  .ucr-table td { padding: 12px 16px; color: #374151; border-bottom: 1px solid #f3f4f6; white-space: nowrap; }
+
+  .ucr-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:24px; }
+  .ucr-grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:20px; margin-bottom:24px; }
+  .ucr-grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-bottom:24px; }
+
+  /* Responsive Col Spans */
+  .col-span-2 { grid-column: span 2; }
+  .col-span-4 { grid-column: span 4; }
+
+  @media(max-width:1024px){
+    .ucr-grid, .ucr-grid-4, .ucr-grid-2 { grid-template-columns:repeat(2,1fr); gap:16px; }
+    .col-span-4 { grid-column: span 2; }
+  }
+  @media(max-width:768px){
+    .ucr-grid, .ucr-grid-4, .ucr-grid-2 { grid-template-columns:1fr; gap:16px; }
+    .col-span-2, .col-span-4 { grid-column: span 1 !important; }
+    .ucr-body  { padding:16px; }
+    .ucr-header { padding: 16px; flex-direction: column; align-items: flex-start; }
+    .ucr-header > div { width: 100%; }
+    .ucr-header > button { align-self: flex-end; margin-top: -30px; }
+    .ucr-footer { justify-content: center; flex-direction: column; }
+    .ucr-footer > div, .ucr-footer > button { width: 100%; justify-content: center; }
+  }
+  @keyframes ucr-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+`;
+
+const FH = 40;
+const PAGE_SIZES = [5, 10, 20, 50];
 
 export default function StockistMappingDeletionReport() {
   // ─── App State ───────────────────────────────────────────────────────────────
@@ -89,18 +138,20 @@ export default function StockistMappingDeletionReport() {
     if (filters.districtIds.length > 0) {
       const fetchEmployees = async () => {
         try {
-          const res = await api.get(`/api/masters/employees/filter?stateId=${filters.stateId}&districtIds=${filters.districtIds.join(',')}`, getAuthHeaders());
+          const query = filters.districtIds.map(id => `districtIds=${id}`).join('&');
+          const res = await api.get(`/api/masters/employees/by-districts?${query}`, getAuthHeaders());
+          
           const employeeData = res.data?.data || res.data || [];
           const normalizedEmployees = Array.isArray(employeeData) ? employeeData.map((e) => ({
             id: String(e.id ?? e.employeeId),
-            employeeName: e.employee_name || e.employeeName || e.name || "Unknown"
+            employeeName: e.employee_name || e.employeeName || e.userName || e.name || "Unknown"
           })) : [];
           setEmployees(normalizedEmployees.filter(opt => opt.id !== ""));
         } catch (err) { console.error("Failed to load employees", err); }
       };
       fetchEmployees();
     }
-  }, [filters.districtIds, filters.stateId, getAuthHeaders]);
+  }, [filters.districtIds, getAuthHeaders]);
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
@@ -120,23 +171,29 @@ export default function StockistMappingDeletionReport() {
     setIsLoading(true);
     setSelectedRowIds([]);
     try {
-      const res = await api.get(`/api/masters/user-stockist-mapping/report?stateId=${filters.stateId}&districtIds=${filters.districtIds.join(',')}&employeeIds=${filters.employeeIds.join(',')}`, getAuthHeaders());
+      const payload = {
+        stateIds: [Number(filters.stateId)],
+        districtIds: filters.districtIds.map(Number),
+        employeeIds: filters.employeeIds.map(Number)
+      };
+
+      const res = await api.post(`/api/masters/stockist-mapping-report/view`, payload, getAuthHeaders());
       
-      const fetchedData = res.data?.data || res.data || [];
+      const fetchedData = res.data?.data?.rows || [];
       
       const normalizedData = Array.isArray(fetchedData) ? fetchedData.map((row, i) => ({
         id: String(row.mappingId || row.id || i),
-        districtName: row.districtName || row.district_name || "Unknown District",
-        stockistName: row.stockistName || row.stockist_name || row.partyName || "Unknown Stockist",
-        userName: row.userName || row.user_name || row.employeeName || "Unknown User"
+        districtName: row.stockistDistrictName || row.employeeDistrictName || "Unknown District",
+        stockistName: row.stockistName || row.partyName || "Unknown Stockist",
+        userName: row.userName || row.employeeName || "Unknown User"
       })) : [];
 
-      setMappedData(normalizedData.length ? normalizedData : getDummyMappedData());
+      setMappedData(normalizedData);
       setTableVisible(true);
       setCurrentPage(1);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to fetch mapped data.");
-      setMappedData(getDummyMappedData());
+      setMappedData([]);
       setTableVisible(true);
       setCurrentPage(1);
     } finally {
@@ -144,7 +201,6 @@ export default function StockistMappingDeletionReport() {
     }
   };
 
-  // Checkbox Selection Logic
   const toggleRowSelection = (id) => {
     setSelectedRowIds(prev => 
       prev.includes(id) ? prev.filter(rowId => rowId !== id) : [...prev, id]
@@ -169,10 +225,11 @@ export default function StockistMappingDeletionReport() {
     setError(""); setSuccessMsg("");
 
     try {
-      await api.delete("/api/masters/user-stockist-mapping", {
-        data: { mappingIds: selectedRowIds },
-        ...getAuthHeaders()
-      });
+      const payload = {
+        mappingIds: selectedRowIds.map(Number)
+      };
+
+      await api.post("/api/masters/stockist-mapping-report/delete", payload, getAuthHeaders());
       
       setSuccessMsg("Selected mappings deleted successfully!");
       
@@ -188,19 +245,10 @@ export default function StockistMappingDeletionReport() {
     }
   };
 
-  // ─── Dummy Data Generator ────────────────────────────────────────────────────
-  const getDummyMappedData = () => [
-    { id: "map_1", districtName: "HARIDWAR", stockistName: "KIRSHNA", userName: "Swati" },
-    { id: "map_2", districtName: "HARIDWAR", stockistName: "Ashu Stockist", userName: "Swati" },
-    { id: "map_3", districtName: "HARIDWAR", stockistName: "AKASH STOCKIST", userName: "Swati" },
-    { id: "map_4", districtName: "DEHRADUN", stockistName: "NEW LIFE PHARMA", userName: "Rohan" },
-    { id: "map_5", districtName: "DEHRADUN", stockistName: "CITY MEDS", userName: "Rohan" }
-  ];
-
-  // ─── Dropdown Options Mapping ────────────────────────────────────────────────
-  const stateOpts = states.map(s => ({ value: s.id, label: s.stateName }));
-  const distOpts = districts.map(d => ({ value: d.id, label: d.districtName }));
-  const empOpts = employees.map(e => ({ value: e.id, label: e.employeeName }));
+  // ─── Dropdown Options Mapping ─────────────────────────────────────────
+  const stateOpts = states.map(s => ({ id: String(s.id), value: String(s.id), label: s.stateName }));
+  const distOpts = districts.map(d => ({ id: String(d.id), value: String(d.id), label: d.districtName }));
+  const empOpts = employees.map(e => ({ id: String(e.id), value: String(e.id), label: e.employeeName }));
 
   // ─── Pagination Logic ────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(mappedData.length / pageSize));
@@ -208,76 +256,84 @@ export default function StockistMappingDeletionReport() {
 
   const allVisibleSelected = pagedData.length > 0 && pagedData.every(row => selectedRowIds.includes(row.id));
 
+  const goToPage = (page) => {
+    setCurrentPage(Math.min(Math.max(1, page), totalPages));
+  };
+
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 animate-in fade-in duration-400 pb-12 font-sans">
-      
-      {/* Global Alerts */}
-      {(error || successMsg) && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col gap-2">
-          {error && (
-            <div className="flex items-center gap-2.5 bg-red-50 text-red-600 px-4 py-3 rounded-lg border border-red-100 text-sm font-bold">
-              <AlertCircle size={16} /> {error}
-            </div>
-          )}
-          {successMsg && (
-            <div className="flex items-center gap-2.5 bg-blue-50 text-blue-700 px-4 py-3 rounded-lg border border-blue-100 text-sm font-bold">
-              <CheckCircle2 size={16} /> {successMsg}
-            </div>
-          )}
+    <div className="ucr-wrap">
+      <style>{STYLES}</style>
+
+      {/* Alerts */}
+      {error && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 16px", color: "#dc2626", fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+      {successMsg && (
+        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "10px 16px", color: "#16a34a", fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <CheckCircle2 size={16} /> {successMsg}
         </div>
       )}
 
       {/* ══ FILTER SECTION ═════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-blue-600 via-blue-500 to-sky-400 rounded-t-xl" />
-        
-        {/* Standardized Header */}
-        <div className="px-6 sm:px-8 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/40">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 border border-blue-100 shadow-sm">
-              <Map size={20} className="text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">MR Stockist Mapped Report</h2>
-              <p className="text-xs font-semibold text-slate-400 mt-0.5">View and manage employee to stockist mappings</p>
-            </div>
+      <div className="ucr-card">
+        <div className="ucr-header">
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "#eff6ff", border: "1px solid #dbeafe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Map size={17} style={{ color: "#2563eb" }} />
           </div>
-
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-slate-600">Filter</span>
-            <button 
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`w-11 h-6 rounded-full flex items-center px-1 transition-colors duration-300 focus:outline-none ${isFilterOpen ? "bg-blue-600" : "bg-slate-300"}`}
-            >
-              <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${isFilterOpen ? "translate-x-5" : "translate-x-0"}`} />
-            </button>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0 }}>MR Stockist Mapped Report</h2>
+            <p style={{ fontSize: 11, color: "#6b7280", margin: 0, marginTop: 2 }}>
+              View and manage employee to stockist mappings
+            </p>
           </div>
+          <button onClick={() => setIsFilterOpen(!isFilterOpen)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#6b7280" }}>FILTER</span>
+              <div style={{ width: 34, height: 18, borderRadius: 20, background: isFilterOpen ? "#2563eb" : "#d1d5db", position: "relative", cursor: "pointer", transition: "0.2s" }}>
+                <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: isFilterOpen ? 18 : 2, transition: "0.2s" }} />
+              </div>
+            </div>
+          </button>
         </div>
 
         {isFilterOpen && (
-          <div className="p-6 sm:p-8 space-y-6 bg-white animate-in slide-in-from-top-2 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 gap-y-8 items-end">
+          <div className="ucr-body">
+            <div className="ucr-grid-4">
               <SingleDropdown 
-                label="SELECT STATE *" options={stateOpts} value={filters.stateId} 
+                label="SELECT STATE *" 
+                options={stateOpts} 
+                value={filters.stateId} 
                 onSelect={(v) => handleFilterChange("stateId", v)} 
               />
               <MultiDropdown 
-                label="SELECT DISTRICT *" options={distOpts} selectedIds={filters.districtIds} 
-                onChange={(v) => handleFilterChange("districtIds", v)} disabled={!filters.stateId} 
+                label="SELECT DISTRICT *" 
+                options={distOpts} 
+                selectedIds={filters.districtIds} 
+                onChange={(v) => handleFilterChange("districtIds", v)} 
+                disabled={!filters.stateId} 
               />
               <MultiDropdown 
-                label="SELECT EMPLOYEE *" options={empOpts} selectedIds={filters.employeeIds} 
-                onChange={(v) => handleFilterChange("employeeIds", v)} disabled={!filters.districtIds.length} 
+                label="SELECT EMPLOYEE *" 
+                options={empOpts} 
+                selectedIds={filters.employeeIds} 
+                onChange={(v) => handleFilterChange("employeeIds", v)} 
+                disabled={!filters.districtIds.length} 
               />
               
-              <div className="flex w-full">
+              <div style={{ display: "flex", alignItems: "flex-end" }}>
                 <button 
                   onClick={handleViewStatus} 
                   disabled={isLoading} 
-                  className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white h-[38px] px-8 rounded-lg text-sm font-bold transition-all shadow-md shadow-blue-200 active:scale-95 disabled:opacity-50 w-full sm:w-auto mt-1"
+                  style={{
+                    height: FH, width: "100%", padding: "0 24px", borderRadius: 8, background: "#2563eb", color: "#fff",
+                    fontSize: 13, fontWeight: 700, border: "none", cursor: isLoading ? "not-allowed" : "pointer",
+                    opacity: isLoading ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+                  }}
                 >
-                  {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                  {isLoading ? <Loader2 size={16} style={{ animation: "ucr-spin 1s linear infinite" }} /> : <Check size={16} />}
                   View Status
                 </button>
               </div>
@@ -288,88 +344,123 @@ export default function StockistMappingDeletionReport() {
 
       {/* ══ TABLE SECTION ═════════════════════════════════════════════════ */}
       {tableVisible && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/40">
-            <h3 className="text-base font-bold text-slate-800">Stockist Mapped Detail</h3>
+        <div className="ucr-card animate-in slide-in-from-bottom-4 duration-500">
+          <div className="ucr-header" style={{ background: "#f9fafb" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: "#374151", margin: 0 }}>Stockist Mapped Detail</h3>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-center border-collapse">
-              <thead className="bg-blue-600 text-white text-[12px] uppercase tracking-wider font-bold">
-                <tr>
-                  <th className="py-3 px-4 w-20">
-                    <div className="flex justify-center cursor-pointer" onClick={toggleAllRows}>
-                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${allVisibleSelected && pagedData.length > 0 ? 'border-white bg-white' : 'border-blue-200'}`}>
-                        {allVisibleSelected && pagedData.length > 0 && <Check size={12} className="text-blue-600 stroke-[4]" />}
+          <div className="ucr-body" style={{ padding: 0 }}>
+            <div className="ucr-table-container" style={{ border: "none", borderRadius: "0 0 16px 16px" }}>
+              <table className="ucr-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 60, textAlign: "center", cursor: "pointer" }} onClick={toggleAllRows}>
+                      <div style={{ 
+                        width: 16, height: 16, borderRadius: 4, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center",
+                        border: allVisibleSelected && pagedData.length > 0 ? "1px solid #2563eb" : "2px solid #d1d5db",
+                        background: allVisibleSelected && pagedData.length > 0 ? "#2563eb" : "#fff"
+                      }}>
+                        {allVisibleSelected && pagedData.length > 0 && <Check size={12} style={{ color: "#fff" }} />}
                       </div>
-                    </div>
-                  </th>
-                  <th className="py-3 px-4">District Name</th>
-                  <th className="py-3 px-4">Stockist Name</th>
-                  <th className="py-3 px-4">User Name</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {mappedData.length === 0 ? (
-                  <tr><td colSpan="4" className="py-12 text-center text-slate-400 font-medium bg-slate-50/50">No mapped records found.</td></tr>
-                ) : pagedData.map((row) => (
-                  <tr key={row.id} 
-                    className={`transition-colors cursor-pointer ${selectedRowIds.includes(row.id) ? 'bg-blue-50/60' : 'hover:bg-slate-50'}`}
-                    onClick={() => toggleRowSelection(row.id)}
-                  >
-                    <td className="py-3 px-4">
-                      <div className="flex justify-center">
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${selectedRowIds.includes(row.id) ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
-                          {selectedRowIds.includes(row.id) && <Check size={12} className="text-white stroke-[4]" />}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-slate-600 uppercase">{row.districtName}</td>
-                    <td className="py-3 px-4 font-bold text-slate-700 uppercase">{row.stockistName}</td>
-                    <td className="py-3 px-4 font-medium text-slate-600">{row.userName}</td>
+                    </th>
+                    <th>District Name</th>
+                    <th>Stockist Name</th>
+                    <th>User Name</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {mappedData.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+                        No mapped records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedData.map((row) => (
+                      <tr 
+                        key={row.id} 
+                        onClick={() => toggleRowSelection(row.id)}
+                        style={{ 
+                          cursor: "pointer", 
+                          background: selectedRowIds.includes(row.id) ? "#eff6ff" : "transparent"
+                        }}
+                      >
+                        <td style={{ textAlign: "center" }}>
+                          <div style={{ 
+                            width: 16, height: 16, borderRadius: 4, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center",
+                            border: selectedRowIds.includes(row.id) ? "1px solid #2563eb" : "2px solid #d1d5db",
+                            background: selectedRowIds.includes(row.id) ? "#2563eb" : "#fff"
+                          }}>
+                            {selectedRowIds.includes(row.id) && <Check size={12} style={{ color: "#fff" }} />}
+                          </div>
+                        </td>
+                        <td style={{ fontWeight: 600, color: "#4b5563" }}>{row.districtName}</td>
+                        <td style={{ fontWeight: 700, color: "#111827", textTransform: "uppercase" }}>{row.stockistName}</td>
+                        <td style={{ fontWeight: 600, color: "#6b7280" }}>{row.userName}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* Pagination & Delete Action */}
-          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-            
-            {/* Delete Button */}
+          <div className="ucr-footer" style={{ borderTop: "1px solid #f3f4f6" }}>
             <button 
               onClick={handleDelete} 
               disabled={isDeleting || selectedRowIds.length === 0} 
-              className="bg-red-500 hover:bg-red-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-sm shadow-red-200 active:scale-95 disabled:opacity-50 disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2 w-full sm:w-auto justify-center"
+              style={{
+                height: 38, padding: "0 20px", borderRadius: 8, background: "#ef4444", color: "#fff",
+                fontSize: 13, fontWeight: 700, border: "none", cursor: (isDeleting || selectedRowIds.length === 0) ? "not-allowed" : "pointer",
+                opacity: (isDeleting || selectedRowIds.length === 0) ? 0.5 : 1, display: "flex", alignItems: "center", gap: 8
+              }}
             >
-              {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              {isDeleting ? <Loader2 size={16} style={{ animation: "ucr-spin 1s linear infinite" }} /> : <Trash2 size={16} />}
               Delete Stockists {selectedRowIds.length > 0 && `(${selectedRowIds.length})`}
             </button>
 
-            {/* Pagination Controls */}
             {mappedData.length > 0 && (
-              <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                  <span>Items per page:</span>
-                  <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="bg-transparent font-bold text-slate-700 focus:outline-none">
-                    <option value={5}>5</option><option value={10}>10</option><option value={20}>20</option>
-                  </select>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+                <div style={{ color: "#6b7280", fontSize: 11 }}>
+                  Showing <span style={{ fontWeight: 700, color: "#374151" }}>{(currentPage - 1) * pageSize + 1}</span> to <span style={{ fontWeight: 700, color: "#374151" }}>{Math.min(currentPage * pageSize, mappedData.length)}</span> of <span style={{ fontWeight: 700, color: "#374151" }}>{mappedData.length}</span> entries
                 </div>
-                <div className="flex items-center gap-4 text-xs font-semibold text-slate-500">
-                  <span>{(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, mappedData.length)} of {mappedData.length}</span>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:text-blue-600 disabled:opacity-30"><ChevronsLeft size={16}/></button>
-                    <button onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1} className="p-1 hover:text-blue-600 disabled:opacity-30"><ChevronLeft size={16}/></button>
-                    <button onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages} className="p-1 hover:text-blue-600 disabled:opacity-30"><ChevronRight size={16}/></button>
-                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1 hover:text-blue-600 disabled:opacity-30"><ChevronsRight size={16}/></button>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ color: "#6b7280", marginRight: 6, fontSize: 11 }}>Items per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                    style={{ border: "1px solid #d1d5db", borderRadius: 4, padding: "2px 6px", fontSize: 11, fontWeight: 700 }}
+                  >
+                    {PAGE_SIZES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  <div style={{ width: 12 }} />
+                  <button
+                    onClick={() => goToPage(1)} disabled={currentPage === 1}
+                    style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 4, padding: "4px 8px", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.4 : 1, fontWeight: 600, fontSize: 11 }}
+                  >First</button>
+                  <button
+                    onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}
+                    style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyItems: "center", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.4 : 1 }}
+                  ><ChevronLeft size={13} style={{ margin: "0 auto" }} /></button>
+                  <div style={{ background: "#2563eb", color: "#fff", border: "1px solid #2563eb", borderRadius: 4, padding: "4px 10px", fontWeight: 700, fontSize: 11 }}>
+                    {currentPage}
                   </div>
+                  <button
+                    onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages || totalPages === 0}
+                    style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyItems: "center", cursor: (currentPage === totalPages || totalPages === 0) ? "not-allowed" : "pointer", opacity: (currentPage === totalPages || totalPages === 0) ? 0.4 : 1 }}
+                  ><ChevronRight size={13} style={{ margin: "0 auto" }} /></button>
+                  <button
+                    onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0}
+                    style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 4, padding: "4px 8px", cursor: (currentPage === totalPages || totalPages === 0) ? "not-allowed" : "pointer", opacity: (currentPage === totalPages || totalPages === 0) ? 0.4 : 1, fontWeight: 600, fontSize: 11 }}
+                  >Last</button>
                 </div>
               </div>
             )}
           </div>
         </div>
       )}
-
     </div>
   );
 }
@@ -386,48 +477,54 @@ function SingleDropdown({ label, value, onSelect, options = [], disabled }) {
   const openMenu = () => {
     if (disabled) return;
     const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
+    if (r) setPos({ top: r.bottom + 4, left: r.left, width: r.width });
     setIsOpen(true);
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleScroll = (e) => { if (e.target?.closest && e.target.closest('.dropdown-portal')) return; setIsOpen(false); };
-    const handleResize = () => setIsOpen(false);
-    window.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("scroll", handleScroll, true); window.removeEventListener("resize", handleResize); };
-  }, [isOpen]);
-
-  const selected = options.find(o => String(o.value) === String(value));
+  const selected = options.find(o => String(o.value) === String(value) || String(o.id) === String(value));
   const hasValue = Boolean(value !== "" && value !== null && value !== undefined);
   
-  const borderCls = disabled ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed" : hasValue ? isOpen ? "border-blue-500 ring-2 ring-blue-100 bg-white" : "border-blue-400 bg-white" : isOpen ? "border-slate-400 ring-2 ring-slate-100 bg-white" : "border-slate-300 bg-white";
-  const labelColor = disabled ? "text-slate-400" : hasValue ? "text-blue-600 font-bold" : isOpen ? "text-slate-500 font-bold" : "text-slate-400 font-semibold";
-  const labelPos = hasValue || isOpen ? "-top-[9px] text-[10px] bg-white px-1.5" : "top-[9px] text-sm bg-transparent";
-
   return (
     <div className="relative w-full select-none mt-1">
-      <div ref={ref} onClick={openMenu} className={`w-full ${INPUT_CLASS} rounded-lg border flex items-center transition-all px-3.5 ${borderCls}`}>
-        <span className={`truncate text-sm font-semibold flex-1 ${hasValue ? "text-slate-800" : "text-transparent"}`}>{selected?.label || " "}</span>
-        <div className={`absolute right-3 flex items-center gap-1 pointer-events-none transition-transform duration-200 ${hasValue ? "text-blue-500" : "text-slate-400"} ${isOpen ? "rotate-180" : ""}`}>
-          <ChevronDown size={14} />
-        </div>
+      <div ref={ref} onClick={openMenu} style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 12px", fontSize: 13, display: "flex",
+          alignItems: "center", border: `1.5px solid ${hasValue && !disabled ? (isOpen ? "#2563eb" : "#2563eb") : (isOpen ? "#d1d5db" : "#d1d5db")}`,
+          cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#f3f4f6" : "#fff",
+          transition: "border-color 0.2s"
+        }}>
+        <span style={{ flex: 1, fontWeight: 600, color: disabled ? "#6b7280" : (hasValue ? "#111827" : "transparent"), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginRight: 8 }}>
+          {selected?.label || " "}
+        </span>
+        <ChevronDown size={14} style={{ color: "#9ca3af", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s", flexShrink: 0 }} />
       </div>
-      <label className={`absolute left-3 pointer-events-none z-10 transition-all duration-200 tracking-wide uppercase ${labelPos} ${labelColor}`}>{label}</label>
+      <label style={{
+          position: "absolute", left: 10, top: (hasValue || isOpen) ? -9 : 12, fontSize: (hasValue || isOpen) ? 10 : 12,
+          fontWeight: 600, color: disabled ? "#9ca3af" : ((hasValue || isOpen) ? "#2563eb" : "#9ca3af"), background: disabled ? ((hasValue || isOpen) ? "#f3f4f6" : "transparent") : "#fff",
+          padding: "0 4px", transition: "0.2s", pointerEvents: "none",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "calc(100% - 20px)"
+        }}>
+        {label}
+      </label>
 
       {isOpen && !disabled && (
         <Portal top={pos.top} left={pos.left} width={pos.width} onClose={() => setIsOpen(false)}>
-          <ul className="py-1.5 max-h-60 overflow-y-auto">
+          <div style={{ maxHeight: 250, overflowY: "auto", padding: "4px 0" }}>
             {options.length === 0 ? (
-               <li className="px-4 py-3 text-sm text-slate-400 italic text-center">No options available</li>
-            ) : options.map((opt, i) => (
-              <li key={i} onMouseDown={e => { e.preventDefault(); onSelect(opt.value); setIsOpen(false); }}
-                className={`px-4 py-2.5 text-sm cursor-pointer font-semibold transition-colors ${String(value) === String(opt.value) ? "bg-blue-50 text-blue-600 border-l-[3px] border-blue-500" : "text-slate-600 hover:bg-slate-50 hover:text-blue-600 border-l-[3px] border-transparent"}`}>
-                {opt.label}
-              </li>
-            ))}
-          </ul>
+               <p style={{ padding: "12px 16px", fontSize: 13, color: "#9ca3af", margin: 0, textAlign: "center", fontStyle: "italic" }}>No options available</p>
+            ) : options.map((opt, i) => {
+              const optValue = opt.id ?? opt.value;
+              return (
+                <div key={i} onMouseDown={e => { e.preventDefault(); onSelect(optValue); setIsOpen(false); }}
+                  style={{
+                    padding: "10px 12px", fontSize: 13, cursor: "pointer", fontWeight: 600,
+                    background: String(value) === String(optValue) ? "#eff6ff" : "transparent",
+                    color: String(value) === String(optValue) ? "#2563eb" : "#374151"
+                  }}>
+                  {opt.label}
+                </div>
+              );
+            })}
+          </div>
         </Portal>
       )}
     </div>
@@ -442,61 +539,69 @@ function MultiDropdown({ label, options = [], selectedIds, onChange, disabled })
   const openMenu = () => {
     if (disabled) return;
     const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
+    if (r) setPos({ top: r.bottom + 4, left: r.left, width: r.width });
     setIsOpen(true);
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleScroll = (e) => { if (e.target?.closest && e.target.closest('.dropdown-portal')) return; setIsOpen(false); };
-    const handleResize = () => setIsOpen(false);
-    window.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("scroll", handleScroll, true); window.removeEventListener("resize", handleResize); };
-  }, [isOpen]);
-
   const toggle = id => onChange(selectedIds.includes(id) ? selectedIds.filter(i => i !== id) : [...selectedIds, id]);
-  const selectAll = () => onChange(options.map(o => o.id));
+  const selectAll = () => onChange(options.map(o => String(o.id ?? o.value)));
   const clearAll = () => onChange([]);
 
   const hasValue = selectedIds.length > 0;
-  const displayText = hasValue ? options.filter(o => selectedIds.includes(o.id)).map(o => o.label).join(", ") : "";
+  const displayText = hasValue ? options.filter(o => selectedIds.includes(String(o.id ?? o.value))).map(o => o.label).join(", ") : "";
   
-  const borderCls = disabled ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed" : hasValue ? isOpen ? "border-blue-500 ring-2 ring-blue-100 bg-white" : "border-blue-400 bg-white" : isOpen ? "border-slate-400 ring-2 ring-slate-100 bg-white" : "border-slate-300 bg-white";
-  const labelColor = disabled ? "text-slate-400" : hasValue ? "text-blue-600 font-bold" : isOpen ? "text-slate-500 font-bold" : "text-slate-400 font-semibold";
-  const labelPos = hasValue || isOpen ? "-top-[9px] text-[10px] bg-white px-1.5" : "top-[9px] text-sm bg-transparent";
-
   return (
     <div className="relative w-full select-none mt-1">
-      <div ref={ref} onClick={openMenu} className={`w-full ${INPUT_CLASS} rounded-lg border flex items-center transition-all px-3.5 ${borderCls}`}>
-        <span className={`block truncate text-sm font-semibold flex-1 min-w-0 ${hasValue ? "text-slate-800" : "text-transparent"}`}>{displayText || " "}</span>
-        <div className={`absolute right-3 flex items-center gap-1 pointer-events-none transition-transform duration-200 ${hasValue ? "text-blue-500" : "text-slate-400"} ${isOpen ? "rotate-180" : ""}`}>
-          <ChevronDown size={14} />
-        </div>
+      <div ref={ref} onClick={openMenu} style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 12px", fontSize: 13, display: "flex",
+          alignItems: "center", border: `1.5px solid ${hasValue && !disabled ? (isOpen ? "#2563eb" : "#2563eb") : (isOpen ? "#d1d5db" : "#d1d5db")}`,
+          cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#f3f4f6" : "#fff",
+          transition: "border-color 0.2s"
+        }}>
+        <span style={{ flex: 1, fontWeight: 600, color: disabled ? "#6b7280" : (hasValue ? "#111827" : "transparent"), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginRight: 8 }}>
+          {displayText || " "}
+        </span>
+        <ChevronDown size={14} style={{ color: "#9ca3af", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s", flexShrink: 0 }} />
       </div>
-      <label className={`absolute left-3 pointer-events-none z-10 transition-all duration-200 tracking-wide uppercase ${labelPos} ${labelColor}`}>{label}</label>
+      <label style={{
+          position: "absolute", left: 10, top: (hasValue || isOpen) ? -9 : 12, fontSize: (hasValue || isOpen) ? 10 : 12,
+          fontWeight: 600, color: disabled ? "#9ca3af" : ((hasValue || isOpen) ? "#2563eb" : "#9ca3af"), background: disabled ? ((hasValue || isOpen) ? "#f3f4f6" : "transparent") : "#fff",
+          padding: "0 4px", transition: "0.2s", pointerEvents: "none",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "calc(100% - 20px)"
+        }}>
+        {label}
+      </label>
 
       {isOpen && !disabled && (
         <Portal top={pos.top} left={pos.left} width={pos.width} onClose={() => setIsOpen(false)}>
-          <div className="flex border-b border-slate-100">
-            <button type="button" onMouseDown={e => { e.preventDefault(); selectAll(); }} className="flex-1 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors">Select All</button>
-            <button type="button" onMouseDown={e => { e.preventDefault(); clearAll(); }} className="flex-1 py-2.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">Clear All</button>
+          <div style={{ display: "flex", borderBottom: "1px solid #f3f4f6" }}>
+            <button type="button" onMouseDown={e => { e.preventDefault(); selectAll(); }} style={{ flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 700, color: "#fff", background: "#2563eb", border: "none", cursor: "pointer" }}>Select All</button>
+            <button type="button" onMouseDown={e => { e.preventDefault(); clearAll(); }} style={{ flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 700, color: "#fff", background: "#ef4444", border: "none", cursor: "pointer" }}>Clear All</button>
           </div>
-          <ul className="py-1.5 max-h-52 overflow-y-auto">
+          <div style={{ maxHeight: 250, overflowY: "auto", padding: "4px 0" }}>
             {options.length === 0 ? (
-               <li className="px-4 py-3 text-sm text-slate-400 italic text-center">No options available</li>
+               <p style={{ padding: "12px 16px", fontSize: 13, color: "#9ca3af", margin: 0, textAlign: "center", fontStyle: "italic" }}>No options available</p>
             ) : options.map((opt, idx) => {
-              const isSel = selectedIds.includes(opt.id);
+              const optId = String(opt.id ?? opt.value);
+              const isSel = selectedIds.includes(optId);
               return (
-                <li key={opt.id ?? idx} onMouseDown={e => { e.preventDefault(); toggle(opt.id); }} className={`px-4 py-2.5 text-sm cursor-pointer flex items-center gap-3 transition-colors ${isSel ? "bg-blue-50" : "hover:bg-slate-50"}`}>
-                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${isSel ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}>
-                    {isSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                <div key={idx} onMouseDown={e => { e.preventDefault(); toggle(optId); }} 
+                  style={{
+                    width: "100%", textAlign: "left", padding: "10px 16px", fontSize: 13, fontWeight: 600,
+                    display: "flex", alignItems: "center", gap: 10, background: isSel ? "#eff6ff" : "transparent",
+                    color: isSel ? "#2563eb" : "#4b5563", border: "none", cursor: "pointer"
+                  }}>
+                  <div style={{
+                      width: 16, height: 16, borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                      border: isSel ? "2px solid #2563eb" : "2px solid #d1d5db", background: isSel ? "#2563eb" : "#fff"
+                    }}>
+                    {isSel && <svg viewBox="0 0 10 8" style={{ width: 10, height: 8 }} fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                   </div>
-                  <span className={`font-semibold ${isSel ? "text-blue-700" : "text-slate-600"}`}>{opt.label}</span>
-                </li>
+                  <span style={{ fontWeight: 600 }}>{opt.label}</span>
+                </div>
               );
             })}
-          </ul>
+          </div>
         </Portal>
       )}
     </div>
@@ -505,6 +610,7 @@ function MultiDropdown({ label, options = [], selectedIds, onChange, disabled })
 
 function Portal({ top, left, width, onClose, children }) {
   const ref = useRef(null);
+  
   useEffect(() => {
     const t = setTimeout(() => {
       const h = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
@@ -514,8 +620,21 @@ function Portal({ top, left, width, onClose, children }) {
     return () => clearTimeout(t);
   }, [onClose]);
   
+  useEffect(() => {
+    const handleScroll = (e) => {
+      if (ref.current && ref.current.contains(e.target)) return;
+      onClose();
+    };
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", onClose);
+    return () => {
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+  
   return (
-    <div ref={ref} style={{ position: "fixed", top, left, width, zIndex: 9999 }} className="dropdown-portal bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+    <div ref={ref} style={{ position: "fixed", top, left, width, zIndex: 99999 }} className="dropdown-portal bg-white border border-[#e5e7eb] rounded-lg shadow-xl overflow-hidden">
       {children}
     </div>
   );

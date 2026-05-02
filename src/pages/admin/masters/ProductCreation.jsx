@@ -122,131 +122,177 @@ export default function ProductCreation() {
   const canSubmit = formData.productName.trim() && formData.mrp && formData.ptr && formData.ptw;
 
   return (
-    <div className="animate-in fade-in duration-500 pb-12">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div style={{ width: "100%", paddingBottom: 48, fontFamily: "Inter, sans-serif" }}>
 
-        {/* <div className="h-1 bg-gradient-to-r from-blue-600 via-blue-400 to-sky-400" /> */}
+      {/* ── Main Card ───────────────────────────────────────────────────── */}
+      <div style={{
+        background: "#fff", borderRadius: 16,
+        boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+        border: "1px solid #f3f4f6", overflow: "hidden",
+      }}>
 
-        <div className="p-6 sm:p-8 space-y-8">
-
-          {/* Header */}
-          <div className="border-b border-gray-100 pb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <Package size={18} className="text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-gray-800">Product Creation Form</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Fill in product details and rate information.</p>
-              </div>
-            </div>
+        {/* Header */}
+        <div style={{
+          padding: "16px 24px", borderBottom: "1px solid #f3f4f6",
+          display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: "#eff6ff", border: "1px solid #dbeafe",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>
+            <Package size={17} style={{ color: "#2563eb" }} />
           </div>
+          <div>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0 }}>
+              Product Creation Form
+            </h2>
+            <p style={{ fontSize: 11, color: "#6b7280", margin: 0, marginTop: 2 }}>
+              Fill in product details and rate information.
+            </p>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: 28 }}>
 
           {/* Alerts */}
           {error && (
-            <div className="flex items-start gap-2.5 bg-red-50 text-red-600 px-4 py-3 rounded-lg border border-red-100 text-sm">
-              <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {error}
+            <div style={{
+              background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12,
+              padding: "10px 16px", display: "flex", alignItems: "center",
+              gap: 10, color: "#dc2626", fontSize: 13, fontWeight: 600,
+            }}>
+              <AlertCircle size={16} /> {error}
             </div>
           )}
           {successMsg && (
-            <div className="flex items-center gap-2.5 bg-emerald-50 text-emerald-700 px-4 py-3 rounded-lg border border-emerald-100 text-sm">
-              <CheckCircle2 size={15} className="flex-shrink-0" /> {successMsg}
+            <div style={{
+              background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12,
+              padding: "10px 16px", display: "flex", alignItems: "center",
+              gap: 10, color: "#16a34a", fontSize: 13, fontWeight: 600,
+            }}>
+              <CheckCircle2 size={16} /> {successMsg}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-8">
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 28 }}>
 
             {/* Select State */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-              <div className="lg:col-span-1">
-                <MultiStateSelect
-                  label="SELECT STATE *"
-                  states={states}
-                  selectedIds={formData.selectedStateIds}
-                  onToggle={handleStateToggle}
-                  onSelectAll={handleSelectAllStates}
-                  onDeselectAll={handleDeselectAllStates}
-                />
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 300px))", gap: 16 }}>
+              <MultiStateSelect
+                label="SELECT STATE *"
+                states={states}
+                selectedIds={formData.selectedStateIds}
+                onToggle={handleStateToggle}
+                onSelectAll={handleSelectAllStates}
+                onDeselectAll={handleDeselectAllStates}
+              />
             </div>
 
-            <hr className="border-gray-100" />
+            {/* Divider */}
+            <div style={{ borderTop: "1px solid #f3f4f6" }} />
 
             {/* Product Information */}
-            <section className="space-y-5">
+            <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <SectionLabel text="Product Information" />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                <FloatingInput label="PRODUCT NAME *"    name="productName"       value={formData.productName}       onChange={handleInputChange} required icon={Package} />
-                <FloatingInput label="PRODUCT CODE"      name="productCode"       value={formData.productCode}       onChange={handleInputChange} icon={Hash} />
-                <FloatingInput label="PRODUCT TYPE"      name="productType"       value={formData.productType}       onChange={handleInputChange} icon={Tag} />
-                <FloatingInput label="PRODUCT SHORT NAME" name="productShortName" value={formData.productShortName}  onChange={handleInputChange} icon={Layers} />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+                <FloatingInput label="PRODUCT NAME *"       name="productName"        value={formData.productName}        onChange={handleInputChange} required icon={Package} />
+                <FloatingInput label="PRODUCT CODE"         name="productCode"        value={formData.productCode}        onChange={handleInputChange} icon={Hash} />
+                <FloatingInput label="PRODUCT TYPE"         name="productType"        value={formData.productType}        onChange={handleInputChange} icon={Tag} />
+                <FloatingInput label="PRODUCT SHORT NAME"   name="productShortName"   value={formData.productShortName}   onChange={handleInputChange} icon={Layers} />
                 <FloatingInput label="PRODUCT PACKAGE SIZE" name="productPackageSize" value={formData.productPackageSize} onChange={handleInputChange} icon={FlaskConical} />
                 <FloatingInput label="SAMPLE PACKAGE SIZE"  name="samplePackageSize"  value={formData.samplePackageSize}  onChange={handleInputChange} icon={FlaskConical} />
               </div>
             </section>
 
-            <hr className="border-gray-100" />
+            {/* Divider */}
+            <div style={{ borderTop: "1px solid #f3f4f6" }} />
 
             {/* Product Rate Information */}
-            <section className="space-y-5">
+            <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <SectionLabel text="Product Rate Information" />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                <FloatingInput label="PTW"   name="ptw"  value={formData.ptw}  onChange={handleInputChange} type="number" icon={DollarSign} error={fieldErrors.ptw} required />
-                <FloatingInput label="PTR"   name="ptr"  value={formData.ptr}  onChange={handleInputChange} type="number" icon={DollarSign} error={fieldErrors.ptr} required />
-                <FloatingInput label="MRP *" name="mrp"  value={formData.mrp}  onChange={handleInputChange} type="number" icon={DollarSign} error={fieldErrors.mrp} required />
-                <FloatingInput label="SAMPLE RATE" name="sampleRate" value={formData.sampleRate} onChange={handleInputChange} type="number" icon={DollarSign} />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                <FloatingInput label="INCLUDE VAT" name="includeVat" value={formData.includeVat} onChange={handleInputChange} icon={Tag} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+                <FloatingInput label="PTW *"        name="ptw"        value={formData.ptw}        onChange={handleInputChange} type="number" icon={DollarSign} error={fieldErrors.ptw} required />
+                <FloatingInput label="PTR *"        name="ptr"        value={formData.ptr}        onChange={handleInputChange} type="number" icon={DollarSign} error={fieldErrors.ptr} required />
+                <FloatingInput label="MRP *"        name="mrp"        value={formData.mrp}        onChange={handleInputChange} type="number" icon={DollarSign} error={fieldErrors.mrp} required />
+                <FloatingInput label="SAMPLE RATE"  name="sampleRate" value={formData.sampleRate} onChange={handleInputChange} type="number" icon={DollarSign} />
+                <FloatingInput label="INCLUDE VAT"  name="includeVat" value={formData.includeVat} onChange={handleInputChange} icon={Tag} />
               </div>
             </section>
 
-            <hr className="border-gray-100" />
+            {/* Divider */}
+            <div style={{ borderTop: "1px solid #f3f4f6" }} />
 
             {/* Submit */}
             <div>
               <button
                 type="submit"
                 disabled={!canSubmit || isSubmitting}
-                className={`flex items-center gap-2 px-8 py-2.5 rounded-lg text-sm font-bold
-                  transition-all active:scale-95
-                  ${canSubmit
-                    ? "bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-200"
-                    : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  padding: "9px 28px", borderRadius: 9, border: "none",
+                  fontSize: 13, fontWeight: 700, cursor: canSubmit && !isSubmitting ? "pointer" : "not-allowed",
+                  background: canSubmit && !isSubmitting ? "#2563eb" : "#f3f4f6",
+                  color: canSubmit && !isSubmitting ? "#fff" : "#9ca3af",
+                  boxShadow: canSubmit && !isSubmitting ? "0 2px 8px rgba(37,99,235,0.25)" : "none",
+                  opacity: isSubmitting ? 0.7 : 1,
+                  transition: "all 0.15s",
+                }}
               >
                 {isSubmitting
-                  ? <Loader2 size={16} className="animate-spin" />
-                  : <span className="font-bold text-base leading-none">✓</span>}
+                  ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />
+                  : <Check size={15} />}
                 Submit Product
               </button>
             </div>
+
           </form>
         </div>
       </div>
 
-      {/* Success Popup */}
+      {/* ── Success Popup ────────────────────────────────────────────────── */}
       {popup.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-2xl p-7 max-w-xs w-full mx-4 flex flex-col items-center animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 border-4 border-blue-100 bg-blue-50 rounded-full flex items-center justify-center mb-5">
-              <Check size={32} className="text-blue-500" strokeWidth={3} />
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 50,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)",
+        }}>
+          <div style={{
+            background: "#fff", borderRadius: 16,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+            padding: "32px 28px", maxWidth: 320, width: "100%",
+            margin: "0 16px", display: "flex", flexDirection: "column",
+            alignItems: "center",
+          }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%",
+              background: "#eff6ff", border: "4px solid #dbeafe",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              marginBottom: 20,
+            }}>
+              <Check size={30} style={{ color: "#2563eb" }} strokeWidth={3} />
             </div>
-            <h3 className="text-base font-bold text-gray-800 text-center mb-6">{popup.message}</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111827", textAlign: "center", marginBottom: 24 }}>
+              {popup.message}
+            </h3>
             <button
               onClick={() => setPopup({ isOpen: false, message: "" })}
-              className="bg-blue-600 hover:bg-blue-700 text-white w-full py-2.5 rounded-lg font-bold transition-all active:scale-95"
+              style={{
+                background: "#2563eb", color: "#fff", width: "100%",
+                padding: "10px 0", borderRadius: 9, border: "none",
+                fontSize: 14, fontWeight: 700, cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(37,99,235,0.25)",
+                transition: "all 0.15s",
+              }}
             >
               OK
             </button>
           </div>
         </div>
       )}
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
     </div>
   );
 }
@@ -254,62 +300,89 @@ export default function ProductCreation() {
 // ─── SectionLabel ─────────────────────────────────────────────────────────────
 function SectionLabel({ text }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-sm font-bold text-gray-700 whitespace-nowrap">{text}</span>
-      <div className="flex-1 h-px bg-gray-100" />
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, color: "#111827", whiteSpace: "nowrap" }}>{text}</span>
+      <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
     </div>
   );
 }
 
 // ─── FloatingInput ────────────────────────────────────────────────────────────
 function FloatingInput({ label, name, type = "text", value, onChange, required, disabled, icon: Icon, error }) {
-  const [isFocused, setIsFocused] = useState(false);
-  const hasValue = Boolean(value?.toString().trim());
+  const [focus, setFocus] = useState(false);
+  const hasVal = Boolean(value?.toString().trim());
+  const active = focus || hasVal;
 
-  const borderClass = error
-    ? isFocused ? "border-red-500 ring-2 ring-red-100" : "border-red-400"
-    : hasValue
-      ? isFocused ? "border-blue-500 ring-2 ring-blue-100" : "border-blue-400"
-      : isFocused ? "border-gray-400 ring-2 ring-gray-100" : "border-gray-300";
+  const borderColor = error
+    ? focus ? "#ef4444" : "#f87171"
+    : focus ? "#2563eb" : hasVal ? "#2563eb" : "#d1d5db";
+
+  const boxShadow = error
+    ? focus ? "0 0 0 3px rgba(239,68,68,0.08)" : "none"
+    : focus ? "0 0 0 3px rgba(37,99,235,0.08)" : "none";
 
   const labelColor = error
-    ? "text-red-500"
-    : hasValue ? "text-blue-500" : isFocused ? "text-gray-500" : "text-gray-400";
-
-  const labelPos = hasValue || isFocused ? "-top-2.5 text-[11px]" : "top-[11px] text-sm";
+    ? "#ef4444"
+    : focus ? "#2563eb" : hasVal ? "#6b7280" : "#9ca3af";
 
   return (
-    <div className="w-full flex flex-col">
-      <div className="relative w-full">
+    <div style={{ width: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ position: "relative", width: "100%", height: 38 }}>
         <input
           type={type} id={name} name={name}
           value={value || ""} onChange={onChange}
           required={required} placeholder=" " disabled={disabled}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          className={`w-full rounded-lg border-2 bg-white pl-4 pr-10 py-[10px] text-sm text-gray-900
-            transition-all focus:outline-none
-            ${disabled ? "bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed" : borderClass}`}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+          style={{
+            width: "100%", height: "100%", borderRadius: 8,
+            padding: "0 36px 0 12px",
+            fontSize: 13, color: "#111827", outline: "none",
+            boxSizing: "border-box",
+            background: disabled ? "#f9fafb" : "#fff",
+            border: `1.5px solid ${borderColor}`,
+            boxShadow,
+            transition: "all 0.15s",
+            cursor: disabled ? "not-allowed" : "text",
+          }}
         />
-        <label htmlFor={name}
-          className={`absolute left-3 px-1 bg-white pointer-events-none z-10
-            transition-all duration-200 font-semibold ${labelPos} ${labelColor}
-            ${disabled ? "!text-gray-400" : ""}`}>
+        {/* Floating label */}
+        <label
+          htmlFor={name}
+          style={{
+            position: "absolute", left: 10, pointerEvents: "none", zIndex: 10,
+            transition: "all 0.15s", fontWeight: 600, letterSpacing: "0.03em",
+            top: active ? -9 : 10,
+            fontSize: active ? 10 : 13,
+            color: active ? labelColor : "#9ca3af",
+            background: active ? "#fff" : "transparent",
+            padding: active ? "0 4px" : "0",
+          }}
+        >
           {label}
         </label>
+        {/* Icon */}
         {Icon && (
-          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-            <Icon className={`h-[16px] w-[16px] ${error ? "text-red-400" : hasValue ? "text-blue-400" : "text-gray-350"}`} />
+          <div style={{
+            position: "absolute", right: 10, top: "50%",
+            transform: "translateY(-50%)", pointerEvents: "none",
+            color: error ? "#f87171" : hasVal ? "#2563eb" : "#9ca3af",
+            display: "flex", alignItems: "center",
+          }}>
+            <Icon size={15} />
           </div>
         )}
       </div>
-      {error && <p className="text-red-500 text-[11px] mt-1 font-medium pl-1">{label} is required!!!</p>}
+      {error && (
+        <p style={{ color: "#ef4444", fontSize: 11, marginTop: 4, fontWeight: 600, paddingLeft: 4 }}>
+          {label.replace(" *", "")} is required!!!
+        </p>
+      )}
     </div>
   );
 }
 
 // ─── MultiStateSelect ─────────────────────────────────────────────────────────
-// ✅ Shows actual state names joined by comma e.g. "Gujarat, Maharashtra"
 function MultiStateSelect({ label, states, selectedIds, onToggle, onSelectAll, onDeselectAll }) {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef(null);
@@ -322,75 +395,124 @@ function MultiStateSelect({ label, states, selectedIds, onToggle, onSelectAll, o
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const hasValue = selectedIds.length > 0;
-
-  // ✅ FIX: Always show actual names joined by ", " — never show "X States Selected"
+  const hasValue    = selectedIds.length > 0;
+  const active      = isOpen || hasValue;
   const displayText = hasValue
-    ? states
-        .filter(s => selectedIds.includes(s.id))
-        .map(s => s.state_name)
-        .join(", ")
+    ? states.filter(s => selectedIds.includes(s.id)).map(s => s.state_name).join(", ")
     : "";
 
-  const borderClass = hasValue
-    ? isOpen ? "border-blue-500 ring-2 ring-blue-100" : "border-blue-400"
-    : isOpen ? "border-gray-400 ring-2 ring-gray-100" : "border-gray-300";
-
-  const labelColor = hasValue ? "text-blue-500" : isOpen ? "text-gray-500" : "text-gray-400";
-  const labelPos   = hasValue || isOpen ? "-top-2.5 text-[11px]" : "top-[11px] text-sm";
+  const borderColor = isOpen ? "#2563eb" : hasValue ? "#2563eb" : "#d1d5db";
+  const boxShadow   = isOpen ? "0 0 0 3px rgba(37,99,235,0.08)" : "none";
 
   return (
-    <div ref={ref} className="relative w-full select-none">
+    <div ref={ref} style={{ position: "relative", width: "100%", userSelect: "none", zIndex: isOpen ? 100 : 1 }}>
 
       {/* Trigger */}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full rounded-lg border-2 bg-white pl-4 pr-10 py-[10px] text-sm
-          flex items-center cursor-pointer transition-all ${borderClass}`}
+        style={{
+          width: "100%", height: 38, borderRadius: 8,
+          padding: "0 36px 0 12px",
+          fontSize: 13, display: "flex", alignItems: "center",
+          cursor: "pointer", background: "#fff",
+          border: `1.5px solid ${borderColor}`,
+          boxShadow,
+          transition: "all 0.15s", boxSizing: "border-box",
+        }}
       >
-        {/* ✅ Truncate long name lists cleanly */}
-        <span className={`block truncate font-medium flex-1 min-w-0 ${hasValue ? "text-gray-900" : "text-transparent"}`}>
+        <span style={{
+          flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          fontWeight: 600, color: hasValue ? "#111827" : "transparent",
+        }}>
           {displayText || " "}
         </span>
-        <div className={`flex items-center gap-1 flex-shrink-0 ml-2 pointer-events-none
-          ${hasValue ? "text-blue-400" : isOpen ? "text-gray-500" : "text-gray-400"}`}>
-          <MapPin size={15} strokeWidth={2} className="opacity-70" />
-          <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        <div style={{
+          position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+          display: "flex", alignItems: "center", gap: 2, pointerEvents: "none",
+          color: isOpen ? "#2563eb" : "#9ca3af",
+        }}>
+          <MapPin size={13} style={{ opacity: 0.7 }} />
+          <ChevronDown
+            size={14}
+            style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+          />
         </div>
       </div>
 
       {/* Floating label */}
-      <label className={`absolute left-3 px-1 bg-white pointer-events-none z-10
-        transition-all duration-200 font-semibold ${labelPos} ${labelColor}`}>
+      <label style={{
+        position: "absolute", left: 10, pointerEvents: "none", zIndex: 11,
+        transition: "all 0.15s", fontWeight: 600, letterSpacing: "0.03em",
+        top: active ? -9 : 10,
+        fontSize: active ? 10 : 13,
+        color: isOpen ? "#2563eb" : hasValue ? "#6b7280" : "#9ca3af",
+        background: active ? "#fff" : "transparent",
+        padding: active ? "0 4px" : "0",
+      }}>
         {label}
       </label>
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-gray-200
-          rounded-lg shadow-xl z-[110] overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-
-          <div className="flex border-b border-gray-100">
-            <button type="button" onClick={(e) => { e.stopPropagation(); onSelectAll(); }}
-              className="flex-1 py-2 text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors">
+        <div style={{
+          position: "absolute", top: "calc(100% + 5px)", left: 0, width: "100%",
+          background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 10,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 200, overflow: "hidden",
+        }}>
+          {/* Select/Deselect All */}
+          <div style={{ display: "flex", borderBottom: "1px solid #f3f4f6" }}>
+            <button
+              type="button"
+              onMouseDown={e => { e.preventDefault(); onSelectAll(); }}
+              style={{
+                flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 700,
+                color: "#fff", background: "#2563eb", border: "none",
+                cursor: "pointer", transition: "background 0.15s",
+              }}
+            >
               Select All
             </button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); onDeselectAll(); }}
-              className="flex-1 py-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">
+            <button
+              type="button"
+              onMouseDown={e => { e.preventDefault(); onDeselectAll(); }}
+              style={{
+                flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 700,
+                color: "#fff", background: "#ef4444", border: "none",
+                cursor: "pointer", transition: "background 0.15s",
+              }}
+            >
               Deselect All
             </button>
           </div>
 
-          <ul className="max-h-56 overflow-y-auto py-1.5">
+          {/* List */}
+          <ul style={{ maxHeight: 220, overflowY: "auto", padding: "4px 0", margin: 0, listStyle: "none" }}>
             {states.map(s => {
               const isSel = selectedIds.includes(s.id);
               return (
-                <li key={s.id}
-                  onClick={(e) => { e.stopPropagation(); onToggle(s.id); }}
-                  className="px-4 py-2.5 text-sm cursor-pointer hover:bg-blue-50 flex items-center gap-3 transition-colors">
-                  <input type="checkbox" readOnly checked={isSel}
-                    className="w-4 h-4 rounded border-gray-300 text-blue-500 pointer-events-none flex-shrink-0" />
-                  <span className={`font-medium ${isSel ? "text-blue-600" : "text-gray-700"}`}>
+                <li
+                  key={s.id}
+                  onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onToggle(s.id); }}
+                  style={{
+                    padding: "9px 12px", fontSize: 13, cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 10,
+                    background: isSel ? "#eff6ff" : "transparent",
+                    transition: "background 0.1s",
+                  }}
+                  onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = "#f9fafb"; }}
+                  onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
+                >
+                  {/* Custom checkbox */}
+                  <div style={{
+                    width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+                    border: isSel ? "none" : "1.5px solid #d1d5db",
+                    background: isSel ? "#2563eb" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.15s",
+                  }}>
+                    {isSel && <Check size={9} style={{ color: "#fff" }} />}
+                  </div>
+                  <span style={{ fontWeight: isSel ? 600 : 400, color: isSel ? "#2563eb" : "#374151" }}>
                     {s.state_name}
                   </span>
                 </li>

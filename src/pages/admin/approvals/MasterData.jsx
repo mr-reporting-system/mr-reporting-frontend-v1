@@ -1,9 +1,48 @@
 import React, { useState, useEffect } from "react";
 import {
   Loader2, CheckCircle2, Trash2, ChevronRight,
-  ArrowLeft, AlertCircle, Check, X, ClipboardList
+  ArrowLeft, AlertCircle, Check, X, ClipboardList,
 } from "lucide-react";
 import api from "../../../services/api";
+
+// ─── Global responsive styles ─────────────────────────────────────────────────
+const STYLES = `
+  *, *::before, *::after { box-sizing: border-box; }
+  .ucr-wrap  { width:100%; padding-bottom:48px; font-family:Inter,sans-serif; overflow-x: hidden; }
+  .ucr-card  { background:#fff; border-radius:16px; box-shadow:0 1px 4px rgba(0,0,0,0.07); border:1px solid #f3f4f6; overflow:visible; margin-bottom: 24px; }
+  .ucr-header{ padding:16px 20px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:12px; }
+  .ucr-body  { padding:24px; }
+  .ucr-footer{ padding:14px 24px; background:#f9fafb; border-top:1px solid #f3f4f6; display:flex; align-items:center; justify-content:flex-end; border-radius:0 0 16px 16px; flex-wrap: wrap; gap: 12px; }
+
+  /* Responsive Table Scroll Logic */
+  .ucr-table-container {
+    border: 1px solid #f3f4f6;
+    border-radius: 12px;
+    overflow-x: auto;
+    background: #fff;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ucr-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 800px; }
+  .ucr-table thead { background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
+  .ucr-table th { padding: 12px 16px; text-align: left; font-weight: 700; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  .ucr-table td { padding: 12px 16px; color: #374151; border-bottom: 1px solid #f3f4f6; white-space: nowrap; }
+
+  /* Summary inner grid (inside one card) */
+  .ucr-summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
+  .ucr-summary-col  { padding: 0; }
+  .ucr-summary-divider { border-left: 1px solid #f3f4f6; }
+
+  @media(max-width:900px){
+    .ucr-summary-grid { grid-template-columns: 1fr; }
+    .ucr-summary-divider { border-left: none; border-top: 1px solid #f3f4f6; }
+  }
+  @media(max-width:600px){
+    .ucr-body  { padding:14px; }
+    .ucr-header { padding: 12px 16px; }
+    .ucr-footer { justify-content: center; }
+  }
+  @keyframes ucr-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+`;
 
 // ─── Navigation levels ────────────────────────────────────────────────────────
 const LEVEL = { MAIN: "main", USER_LIST: "userList", FINAL_LIST: "finalList" };
@@ -15,8 +54,11 @@ const ENTITIES = [
   { category: "provider", label: "Chemist / Stockist" },
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────────────────────────────────
 export default function MasterData() {
-  // ── Navigation ───────────────────────────────────────────────────────────
+  // ── Navigation ────────────────────────────────────────────────────────────
   const [level,        setLevel]        = useState(LEVEL.MAIN);
   const [reqType,      setReqType]      = useState(null);
   const [category,     setCategory]     = useState(null);
@@ -34,7 +76,7 @@ export default function MasterData() {
   const [checkedIds,   setCheckedIds]   = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reject popup
+  // ── Reject popup ──────────────────────────────────────────────────────────
   const [rejectPopup,  setRejectPopup]  = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
@@ -47,28 +89,42 @@ export default function MasterData() {
       const res = await api.get("/api/approvals/counts");
       if (res.data?.success) setCounts(res.data.data);
       else if (res.data?.additions) setCounts(res.data);
-    } catch (err) { console.error(err); }
-    finally { setIsLoading(false); }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ── Level 1 → 2 ───────────────────────────────────────────────────────────
   const handleCountClick = async (type, cat) => {
-    setReqType(type); setCategory(cat);
-    setCheckedIds([]); setError(""); setSuccessMsg("");
+    setReqType(type);
+    setCategory(cat);
+    setCheckedIds([]);
+    setError("");
+    setSuccessMsg("");
     setIsLoading(true);
+
     try {
       const res = await api.get(`/api/approvals/summary/${cat}/${type}`);
       const data = res.data?.data || res.data || [];
       setUserList(Array.isArray(data) ? data : []);
       setLevel(LEVEL.USER_LIST);
-    } catch { setError("Failed to load user requests."); }
-    finally { setIsLoading(false); }
+    } catch {
+      setError("Failed to load user requests.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ── Level 2 → 3 ───────────────────────────────────────────────────────────
   const handleUserClick = async (user) => {
-    setSelectedUser(user); setCheckedIds([]); setError(""); setSuccessMsg("");
+    setSelectedUser(user);
+    setCheckedIds([]);
+    setError("");
+    setSuccessMsg("");
     setIsLoading(true);
+
     try {
       const employeeId = user.employeeId || user.id || user.employee_id;
       const res = await api.get(
@@ -78,23 +134,32 @@ export default function MasterData() {
       console.log("DEBUG THIRD TABLE DATA:", data[0]);
       setFinalList(Array.isArray(data) ? data : []);
       setLevel(LEVEL.FINAL_LIST);
-    } catch { setError("Failed to load final list."); }
-    finally { setIsLoading(false); }
+    } catch {
+      setError("Failed to load final list.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ── Back ──────────────────────────────────────────────────────────────────
   const goBack = () => {
-    setError(""); setSuccessMsg(""); setCheckedIds([]);
+    setError("");
+    setSuccessMsg("");
+    setCheckedIds([]);
     if (level === LEVEL.FINAL_LIST) {
-      setLevel(LEVEL.USER_LIST); setSelectedUser(null);
+      setLevel(LEVEL.USER_LIST);
+      setSelectedUser(null);
     } else {
-      setLevel(LEVEL.MAIN); setReqType(null); setCategory(null);
+      setLevel(LEVEL.MAIN);
+      setReqType(null);
+      setCategory(null);
       fetchCounts();
     }
   };
 
-  const toggleCheck = (id)  => setCheckedIds(p => p.includes(id) ? p.filter(i => i !== id) : [...p, id]);
-  const toggleAll   = (ids) => setCheckedIds(p => p.length === ids.length ? [] : ids);
+  // ── Checkbox ──────────────────────────────────────────────────────────────
+  const toggleCheck = (id)  => setCheckedIds((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
+  const toggleAll   = (ids) => setCheckedIds((p) => p.length === ids.length ? [] : ids);
 
   // ── Refresh final list ────────────────────────────────────────────────────
   const refreshFinal = async () => {
@@ -107,7 +172,9 @@ export default function MasterData() {
   // ── Approve ───────────────────────────────────────────────────────────────
   const handleApprove = async () => {
     if (!checkedIds.length) return setError("Please select at least one record.");
-    setIsSubmitting(true); setError("");
+    setIsSubmitting(true);
+    setError("");
+
     try {
       const res = await api.post(
         `/api/approvals/approve/${category}/${reqType}`,
@@ -115,36 +182,49 @@ export default function MasterData() {
       );
       if (res.data?.success || res.status === 200 || res.status === 201) {
         setSuccessMsg(`${checkedIds.length} record(s) approved successfully!`);
-        setCheckedIds([]); await refreshFinal();
+        setCheckedIds([]);
+        await refreshFinal();
         setTimeout(() => setSuccessMsg(""), 3500);
       }
-    } catch (err) { setError(err.response?.data?.message || "Approve failed."); }
-    finally { setIsSubmitting(false); }
+    } catch (err) {
+      setError(err.response?.data?.message || "Approve failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ── Reject submit ─────────────────────────────────────────────────────────
   const handleRejectSubmit = async () => {
     if (!rejectReason.trim()) return;
     setIsSubmitting(true);
+
     try {
       const res = await api.post(
         `/api/approvals/reject/${category}/${reqType}`,
         checkedIds
       );
       if (res.data?.success || res.status === 200 || res.status === 201) {
-        setRejectPopup(false); setRejectReason("");
+        setRejectPopup(false);
+        setRejectReason("");
         setSuccessMsg(`${checkedIds.length} record(s) rejected.`);
-        setCheckedIds([]); await refreshFinal();
+        setCheckedIds([]);
+        await refreshFinal();
         setTimeout(() => setSuccessMsg(""), 3500);
       }
-    } catch (err) { setError(err.response?.data?.message || "Reject failed."); setRejectPopup(false); }
-    finally { setIsSubmitting(false); }
+    } catch (err) {
+      setError(err.response?.data?.message || "Reject failed.");
+      setRejectPopup(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ── Delete (deletion flow) ────────────────────────────────────────────────
   const handleDelete = async () => {
     if (!checkedIds.length) return setError("Please select at least one record.");
-    setIsSubmitting(true); setError("");
+    setIsSubmitting(true);
+    setError("");
+
     try {
       const res = await api.post(
         `/api/approvals/approve/${category}/${reqType}`,
@@ -152,15 +232,20 @@ export default function MasterData() {
       );
       if (res.data?.success || res.status === 200 || res.status === 201) {
         setSuccessMsg(`${checkedIds.length} record(s) deleted successfully!`);
-        setCheckedIds([]); await refreshFinal();
+        setCheckedIds([]);
+        await refreshFinal();
         setTimeout(() => setSuccessMsg(""), 3500);
       }
-    } catch (err) { setError(err.response?.data?.message || "Delete failed."); }
-    finally { setIsSubmitting(false); }
+    } catch (err) {
+      setError(err.response?.data?.message || "Delete failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ── Breadcrumb ────────────────────────────────────────────────────────────
-  const entityLabel = ENTITIES.find(e => e.category === category)?.label || category;
+  const entityLabel = ENTITIES.find((e) => e.category === category)?.label || category;
+
   const crumbs = () => {
     const parts = ["Approval Master"];
     if (level !== LEVEL.MAIN) {
@@ -175,36 +260,52 @@ export default function MasterData() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5 animate-in fade-in duration-400 pb-12">
+    <div className="ucr-wrap">
+      <style>{STYLES}</style>
 
       {/* ── Page Card Header ──────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="h-1 bg-gradient-to-r from-blue-600 via-blue-400 to-sky-400" />
-        <div className="px-6 sm:px-8 py-5 flex items-center gap-3">
+      <div className="ucr-card">
+        <div className="ucr-header">
           {level !== LEVEL.MAIN && (
-            <button onClick={goBack}
-              className="flex items-center justify-center w-8 h-8 rounded-lg
-                border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300
-                transition-all flex-shrink-0">
+            <button
+              onClick={goBack}
+              style={{
+                width: 32, height: 32, borderRadius: 8, border: "1px solid #e5e7eb",
+                background: "#fff", display: "flex", alignItems: "center",
+                justifyContent: "center", cursor: "pointer", flexShrink: 0, color: "#6b7280",
+              }}
+            >
               <ArrowLeft size={16} />
             </button>
           )}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-              <ClipboardList size={18} className="text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-800">Approval Master</h2>
-              <div className="flex items-center gap-1 mt-0.5">
-                {crumbs().map((c, i) => (
-                  <React.Fragment key={i}>
-                    {i > 0 && <ChevronRight size={12} className="text-gray-300" />}
-                    <span className={`text-xs ${i === crumbs().length - 1 ? "text-blue-500 font-semibold" : "text-gray-400"}`}>
-                      {c}
-                    </span>
-                  </React.Fragment>
-                ))}
-              </div>
+          <div
+            style={{
+              width: 36, height: 36, borderRadius: 10, background: "#eff6ff",
+              border: "1px solid #dbeafe", display: "flex", alignItems: "center",
+              justifyContent: "center", flexShrink: 0,
+            }}
+          >
+            <ClipboardList size={18} style={{ color: "#2563eb" }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0 }}>
+              Approval Master
+            </h2>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+              {crumbs().map((c, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <ChevronRight size={12} style={{ color: "#d1d5db" }} />}
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: i === crumbs().length - 1 ? 700 : 400,
+                      color: i === crumbs().length - 1 ? "#2563eb" : "#9ca3af",
+                    }}
+                  >
+                    {c}
+                  </span>
+                </React.Fragment>
+              ))}
             </div>
           </div>
         </div>
@@ -212,47 +313,70 @@ export default function MasterData() {
 
       {/* Alerts */}
       {error && (
-        <div className="flex items-start gap-2.5 bg-red-50 text-red-600 px-4 py-3 rounded-lg border border-red-100 text-sm">
-          <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {error}
+        <div
+          style={{
+            background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12,
+            padding: "10px 16px", color: "#dc2626", fontSize: 13, fontWeight: 600,
+            marginBottom: 16, display: "flex", alignItems: "center", gap: 8,
+          }}
+        >
+          <AlertCircle size={16} /> {error}
         </div>
       )}
       {successMsg && (
-        <div className="flex items-center gap-2.5 bg-emerald-50 text-emerald-700 px-4 py-3 rounded-lg border border-emerald-100 text-sm">
-          <CheckCircle2 size={15} className="flex-shrink-0" /> {successMsg}
+        <div
+          style={{
+            background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12,
+            padding: "10px 16px", color: "#16a34a", fontSize: 13, fontWeight: 600,
+            marginBottom: 16, display: "flex", alignItems: "center", gap: 8,
+          }}
+        >
+          <CheckCircle2 size={16} /> {successMsg}
         </div>
       )}
 
       {/* Loader */}
       {isLoading && (
-        <div className="flex justify-center py-20">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="animate-spin text-blue-500" size={32} />
-            <p className="text-sm text-gray-400 font-medium">Loading…</p>
+        <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <Loader2
+              style={{ animation: "ucr-spin 1s linear infinite", color: "#2563eb" }}
+              size={32}
+            />
+            <p style={{ fontSize: 13, color: "#9ca3af", fontWeight: 500, margin: 0 }}>Loading…</p>
           </div>
         </div>
       )}
 
       {/* ══════════════════════════════════════════════════════════════
-          LEVEL 1 — Two summary cards
+          LEVEL 1 — Both summary panels inside ONE card
       ══════════════════════════════════════════════════════════════ */}
       {!isLoading && level === LEVEL.MAIN && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <SummaryCard
-            title="Addition Requests"
-            accentColor="blue"
-            counts={counts.additions || {}}
-            reqType="addition"
-            entities={ENTITIES}
-            onCountClick={handleCountClick}
-          />
-          <SummaryCard
-            title="Deletion Requests"
-            accentColor="red"
-            counts={counts.deletions || {}}
-            reqType="deletion"
-            entities={ENTITIES}
-            onCountClick={handleCountClick}
-          />
+        <div className="ucr-card">
+          <div className="ucr-summary-grid">
+            {/* Addition Requests */}
+            <div className="ucr-summary-col">
+              <SummaryPanel
+                title="Addition Requests"
+                accentColor="blue"
+                counts={counts.additions || {}}
+                reqType="addition"
+                entities={ENTITIES}
+                onCountClick={handleCountClick}
+              />
+            </div>
+            {/* Deletion Requests */}
+            <div className="ucr-summary-col ucr-summary-divider">
+              <SummaryPanel
+                title="Deletion Requests"
+                accentColor="red"
+                counts={counts.deletions || {}}
+                reqType="deletion"
+                entities={ENTITIES}
+                onCountClick={handleCountClick}
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -260,58 +384,70 @@ export default function MasterData() {
           LEVEL 2 — User summary table
       ══════════════════════════════════════════════════════════════ */}
       {!isLoading && level === LEVEL.USER_LIST && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-6 sm:px-8 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-gray-800">
-              User's {entityLabel}{" "}
-              <span className={reqType === "addition" ? "text-blue-600" : "text-red-500"}>
-                {reqType === "addition" ? "Addition" : "Deletion"}
-              </span>{" "}
-              Requests
-            </h3>
+        <div className="ucr-card">
+          <div className="ucr-header" style={{ background: "#f9fafb" }}>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: 12, fontWeight: 700, color: "#4b5563", margin: 0 }}>
+                USER'S {entityLabel.toUpperCase()}{" "}
+                <span style={{ color: reqType === "addition" ? "#2563eb" : "#dc2626" }}>
+                  {reqType === "addition" ? "ADDITION" : "DELETION"}
+                </span>{" "}
+                REQUESTS
+              </h3>
+            </div>
             {userList.length > 0 && (
-              <span className="text-xs font-semibold bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full">
+              <span
+                style={{
+                  fontSize: 11, fontWeight: 700, background: "#f3f4f6",
+                  color: "#6b7280", padding: "3px 10px", borderRadius: 20,
+                }}
+              >
                 {userList.length} user{userList.length !== 1 ? "s" : ""}
               </span>
             )}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left min-w-[640px]">
-              <thead className="bg-blue-600 text-white text-xs uppercase tracking-wider">
-                <tr>
-                  <Th>SN.</Th>
-                  <Th>State Name</Th>
-                  <Th>Headquarter Name</Th>
-                  <Th>User Name</Th>
-                  <Th center>Total Request</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {userList.length === 0
-                  ? <EmptyRow cols={5} />
-                  : userList.map((row, i) => (
-                    <tr key={row.employeeId || i}
-                      className={`transition-colors hover:bg-blue-50/30 ${i % 2 !== 0 ? "bg-gray-50/40" : ""}`}>
-                      <Td>{i + 1}</Td>
-                      <Td>{row.stateName || "—"}</Td>
-                      <Td>{row.districtName || "—"}</Td>
-                      <Td>{row.employeeName || "—"}</Td>
-                      <Td center>
-                        <button
-                          onClick={() => handleUserClick(row)}
-                          className="inline-flex items-center gap-1 font-bold text-blue-600
-                            hover:text-blue-800 transition-colors group">
-                          <span className="group-hover:underline">
+
+          <div className="ucr-body">
+            <div className="ucr-table-container">
+              <table className="ucr-table">
+                <thead>
+                  <tr>
+                    <th>SN.</th>
+                    <th>State Name</th>
+                    <th>Headquarter Name</th>
+                    <th>User Name</th>
+                    <th style={{ textAlign: "center" }}>Total Request</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userList.length === 0 ? (
+                    <EmptyRow cols={5} />
+                  ) : (
+                    userList.map((row, i) => (
+                      <tr key={row.employeeId || i}>
+                        <td>{i + 1}</td>
+                        <td>{row.stateName || "—"}</td>
+                        <td>{row.districtName || "—"}</td>
+                        <td>{row.employeeName || "—"}</td>
+                        <td style={{ textAlign: "center" }}>
+                          <button
+                            onClick={() => handleUserClick(row)}
+                            style={{
+                              background: "none", border: "none", color: "#2563eb",
+                              fontWeight: 700, cursor: "pointer", display: "inline-flex",
+                              alignItems: "center", gap: 4, fontSize: 13,
+                            }}
+                          >
                             {row.totalRequests || 0}
-                          </span>
-                          <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                        </button>
-                      </Td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
+                            <ChevronRight size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -320,22 +456,31 @@ export default function MasterData() {
           LEVEL 3 — Final details table + actions
       ══════════════════════════════════════════════════════════════ */}
       {!isLoading && level === LEVEL.FINAL_LIST && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 sm:px-8 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-gray-800">
-                {entityLabel} Requests
-                <span className="ml-2 text-gray-400 font-normal">
+        <div className="ucr-card">
+          <div className="ucr-header">
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 700, color: "#374151", margin: 0 }}>
+                {entityLabel.toUpperCase()} REQUESTS
+                <span style={{ marginLeft: 8, color: "#9ca3af", fontWeight: 400, fontSize: 12 }}>
                   — {selectedUser?.employeeName}
                 </span>
               </h3>
-              {checkedIds.length > 0 && (
-                <span className="text-xs font-semibold bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full border border-blue-100">
-                  {checkedIds.length} selected
-                </span>
-              )}
             </div>
-            <div className="overflow-x-auto">
+            {checkedIds.length > 0 && (
+              <span
+                style={{
+                  fontSize: 11, fontWeight: 700, background: "#eff6ff",
+                  color: "#2563eb", padding: "3px 10px", borderRadius: 20,
+                  border: "1px solid #dbeafe",
+                }}
+              >
+                {checkedIds.length} selected
+              </span>
+            )}
+          </div>
+
+          <div className="ucr-body">
+            <div className="ucr-table-container">
               <FinalTable
                 category={category}
                 rows={finalList}
@@ -347,25 +492,27 @@ export default function MasterData() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-3 flex-wrap pt-1">
+          <div className="ucr-footer">
             {reqType === "addition" ? (
               <>
                 <ActionBtn
                   onClick={handleApprove}
                   disabled={!checkedIds.length || isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-200"
-                  icon={<Check size={15} />}
+                  color="blue"
+                  icon={<Check size={14} />}
                   label="Approve"
                   loading={isSubmitting}
                 />
                 <ActionBtn
                   onClick={() => {
                     if (!checkedIds.length) return setError("Please select at least one record.");
-                    setError(""); setRejectReason(""); setRejectPopup(true);
+                    setError("");
+                    setRejectReason("");
+                    setRejectPopup(true);
                   }}
                   disabled={!checkedIds.length || isSubmitting}
-                  className="bg-gray-700 hover:bg-gray-800 text-white shadow-sm"
-                  icon={<X size={15} />}
+                  color="gray"
+                  icon={<X size={14} />}
                   label="Reject"
                 />
               </>
@@ -374,19 +521,21 @@ export default function MasterData() {
                 <ActionBtn
                   onClick={handleDelete}
                   disabled={!checkedIds.length || isSubmitting}
-                  className="bg-red-500 hover:bg-red-600 text-white shadow-sm shadow-red-200"
-                  icon={<Trash2 size={15} />}
+                  color="red"
+                  icon={<Trash2 size={14} />}
                   label="Delete"
                   loading={isSubmitting}
                 />
                 <ActionBtn
                   onClick={() => {
                     if (!checkedIds.length) return setError("Please select at least one record.");
-                    setError(""); setRejectReason(""); setRejectPopup(true);
+                    setError("");
+                    setRejectReason("");
+                    setRejectPopup(true);
                   }}
                   disabled={!checkedIds.length || isSubmitting}
-                  className="bg-gray-700 hover:bg-gray-800 text-white shadow-sm"
-                  icon={<X size={15} />}
+                  color="gray"
+                  icon={<X size={14} />}
                   label="Reject"
                 />
               </>
@@ -399,46 +548,88 @@ export default function MasterData() {
           REJECT POPUP
       ══════════════════════════════════════════════════════════════ */}
       {rejectPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40
-          backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden
-            animate-in zoom-in-95 duration-150">
-            <div className="px-6 pt-6 pb-3 text-center border-b border-gray-100">
-              <div className="w-11 h-11 rounded-full bg-red-50 border-2 border-red-100
-                flex items-center justify-center mx-auto mb-3">
-                <X size={20} className="text-red-500" />
+        <div
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff", borderRadius: 16, width: "100%", maxWidth: 420,
+              margin: "0 16px", overflow: "hidden",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.12)",
+            }}
+          >
+            {/* Popup header */}
+            <div
+              style={{
+                padding: "24px 24px 16px", textAlign: "center",
+                borderBottom: "1px solid #f3f4f6",
+              }}
+            >
+              <div
+                style={{
+                  width: 44, height: 44, borderRadius: "50%", background: "#fef2f2",
+                  border: "2px solid #fecaca", display: "flex", alignItems: "center",
+                  justifyContent: "center", margin: "0 auto 12px",
+                }}
+              >
+                <X size={20} style={{ color: "#dc2626" }} />
               </div>
-              <h3 className="text-base font-bold text-gray-800">Rejection Message</h3>
-              <p className="text-xs text-gray-500 mt-1">
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: "0 0 4px" }}>
+                Rejection Message
+              </h3>
+              <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
                 Provide a reason for rejecting {checkedIds.length} record(s).
               </p>
             </div>
-            <div className="px-6 py-5">
+            {/* Popup body */}
+            <div style={{ padding: "20px 24px" }}>
               <textarea
                 rows={5}
                 placeholder="Type reason here…"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                className="w-full rounded-lg border-2 border-gray-300 focus:border-blue-500
-                  focus:ring-2 focus:ring-blue-100 px-4 py-3 text-sm text-gray-800
-                  placeholder-gray-400 resize-none focus:outline-none transition-all"
+                style={{
+                  width: "100%", borderRadius: 8, border: "1.5px solid #d1d5db",
+                  padding: "10px 12px", fontSize: 13, color: "#111827",
+                  resize: "none", outline: "none", fontFamily: "Inter, sans-serif",
+                }}
               />
             </div>
-            <div className="flex items-center justify-center gap-3 px-6 pb-6">
+            {/* Popup footer */}
+            <div
+              style={{
+                padding: "0 24px 24px", display: "flex", gap: 10, justifyContent: "center",
+              }}
+            >
               <button
                 onClick={handleRejectSubmit}
                 disabled={!rejectReason.trim() || isSubmitting}
-                className="flex items-center gap-2 px-8 py-2.5 rounded-lg bg-blue-600
-                  hover:bg-blue-700 text-white text-sm font-bold transition-all active:scale-95
-                  disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-blue-200"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 32px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  border: "none", background: "#2563eb", color: "#fff",
+                  cursor: !rejectReason.trim() || isSubmitting ? "not-allowed" : "pointer",
+                  opacity: !rejectReason.trim() || isSubmitting ? 0.6 : 1,
+                }}
               >
-                {isSubmitting && <Loader2 size={14} className="animate-spin" />}
+                {isSubmitting && (
+                  <Loader2
+                    size={14}
+                    style={{ animation: "ucr-spin 1s linear infinite" }}
+                  />
+                )}
                 OK
               </button>
               <button
                 onClick={() => { setRejectPopup(false); setRejectReason(""); }}
-                className="px-8 py-2.5 rounded-lg border-2 border-gray-300 text-gray-600
-                  hover:border-gray-400 text-sm font-bold transition-all active:scale-95"
+                style={{
+                  padding: "8px 32px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  border: "1.5px solid #d1d5db", background: "#fff", color: "#374151",
+                  cursor: "pointer",
+                }}
               >
                 Cancel
               </button>
@@ -450,46 +641,73 @@ export default function MasterData() {
   );
 }
 
-// ─── SummaryCard ──────────────────────────────────────────────────────────────
-function SummaryCard({ title, accentColor, counts, reqType, entities, onCountClick }) {
-  const headerCls = accentColor === "blue" ? "bg-blue-600 text-white" : "bg-red-500 text-white";
-  const countCls  = accentColor === "blue" ? "text-blue-600 hover:text-blue-800" : "text-red-500 hover:text-red-700";
+// ═══════════════════════════════════════════════════════════════════
+// SummaryPanel — no outer card; lives inside the shared ucr-card
+// ═══════════════════════════════════════════════════════════════════
+function SummaryPanel({ title, accentColor, counts, reqType, entities, onCountClick }) {
+  const isBlue = accentColor === "blue";
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-gray-800">{title}</h3>
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full
-          ${accentColor === "blue" ? "bg-blue-50 text-blue-500" : "bg-red-50 text-red-500"}`}>
+    <div>
+      {/* Panel header */}
+      <div
+        style={{
+          padding: "14px 20px", borderBottom: "1px solid #f3f4f6",
+          display: "flex", alignItems: "center", gap: 12,
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: "#111827", margin: 0 }}>{title}</h3>
+        </div>
+        <span
+          style={{
+            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+            letterSpacing: "0.05em", padding: "3px 10px", borderRadius: 20,
+            background: isBlue ? "#eff6ff" : "#fef2f2",
+            color: isBlue ? "#2563eb" : "#dc2626",
+          }}
+        >
           {reqType}
         </span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className={headerCls}>
-            <tr>
-              <th className="py-3 px-5 font-semibold text-center text-xs uppercase tracking-wider">Request For</th>
-              <th className="py-3 px-5 font-semibold text-center text-xs uppercase tracking-wider">Count</th>
+
+      {/* Panel table */}
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <colgroup>
+          <col style={{ width: "60%" }} />
+          <col style={{ width: "40%" }} />
+        </colgroup>
+        <thead>
+          <tr style={{ background: "#f9fafb", borderBottom: "1px solid #f3f4f6" }}>
+            <th style={{ padding: "12px 20px", textAlign: "center", fontWeight: 700, color: "#6b7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Request For
+            </th>
+            <th style={{ padding: "12px 20px", textAlign: "center", fontWeight: 700, color: "#6b7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Count
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {entities.map((entity) => (
+            <tr key={entity.category} style={{ borderBottom: "1px solid #f3f4f6" }}>
+              <td style={{ padding: "14px 20px", textAlign: "center", color: "#374151", fontWeight: 500 }}>
+                {entity.label}
+              </td>
+              <td style={{ padding: "14px 20px", textAlign: "center" }}>
+                <button
+                  onClick={() => onCountClick(reqType, entity.category)}
+                  style={{
+                    background: "none", border: "none", fontSize: 15, fontWeight: 700,
+                    cursor: "pointer", color: isBlue ? "#2563eb" : "#dc2626",
+                  }}
+                >
+                  {counts[entity.category] ?? 0}
+                </button>
+              </td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {entities.map((entity, i) => (
-              <tr key={entity.category}
-                className={`transition-colors hover:bg-gray-50/60 ${i % 2 !== 0 ? "bg-gray-50/40" : "bg-white"}`}>
-                <td className="py-3.5 px-5 text-gray-600 text-center font-medium">{entity.label}</td>
-                <td className="py-3.5 px-5 text-center">
-                  <button
-                    onClick={() => onCountClick(reqType, entity.category)}
-                    className={`text-[15px] font-bold transition-colors hover:underline ${countCls}`}
-                  >
-                    {counts[entity.category] ?? 0}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -526,16 +744,9 @@ const COLUMNS = {
   ],
 };
 
-// ─── ✅ FIX: getValue drills into nested objects from the API response ─────────
-// Debug showed: { areaCode, areaName, areaType, district: { districtName, state: { stateName } }, employee: { name } }
-// So stateName lives at:  row.district?.state?.stateName
-//    districtName lives at: row.district?.districtName
-//    employeeName lives at: row.employee?.name
-//    areaName lives at:     row.area?.areaName  OR  row.areaName (flat)
+// ─── getValue — drills into nested objects from the API response ───────────────
 const getValue = (row, key) => {
   switch (key) {
-    // ── STATE NAME ──
-    // Try nested paths: district.state.stateName → district.stateName → flat stateName
     case "stateName":
       return row.district?.state?.stateName
           || row.district?.state?.state_name
@@ -544,9 +755,6 @@ const getValue = (row, key) => {
           || row.stateName
           || row.state_name
           || "—";
-
-    // ── HEADQUARTER / DISTRICT NAME ──
-    // Try nested: district.districtName → flat districtName
     case "districtName":
       return row.district?.districtName
           || row.district?.district_name
@@ -555,8 +763,6 @@ const getValue = (row, key) => {
           || row.district_name
           || row.hqName
           || "—";
-
-    // ── EMPLOYEE / USER NAME ──
     case "employeeName":
       return row.employee?.name
           || row.employee?.employeeName
@@ -564,8 +770,6 @@ const getValue = (row, key) => {
           || row.userName
           || row.user_name
           || "—";
-
-    // ── AREA NAME ──
     case "areaName":
       return row.area?.areaName
           || row.area?.area_name
@@ -573,167 +777,167 @@ const getValue = (row, key) => {
           || row.areaName
           || row.area_name
           || "—";
-
-    // ── AREA CODE (flat on root) ──
     case "areaCode":
       return row.areaCode || row.area_code || row.area?.areaCode || "—";
-
-    // ── AREA TYPE (flat on root) ──
     case "areaType":
       return row.areaType || row.area_type || row.area?.areaType || row.type || "—";
-
-    // ── DOCTOR NAME ──
     case "doctorName":
       return row.doctorName || row.doctor_name || row.doctor?.name || row.name || "—";
-
-    // ── DOCTOR CODE ──
     case "doctorCode":
       return row.doctorCode || row.doctor_code || row.doctor?.doctorCode || "—";
-
-    // ── MSL NO ──
     case "mslNo":
       return row.mslNo || row.msl_no || row.doctor?.mslNo || "—";
-
-    // ── PROVIDER NAME ──
     case "providerName":
       return row.providerName || row.provider_name
           || row.chemistName  || row.chemist_name
           || row.name         || "—";
-
-    // ── PROVIDER CODE ──
     case "providerCode":
       return row.providerCode || row.provider_code
           || row.chemistCode  || row.chemist_code || "—";
-
-    // ── PHONE / MOBILE ──
     case "phone":
       return row.phone || row.mobile || row.mobile_no || row.mobileNo || "—";
-
-    // ── TYPE ──
     case "type":
       return row.type || row.providerType || row.provider_type || "—";
-
-    // ── FALLBACK: return whatever the key is on the root object ──
     default:
       return row[key] ?? "—";
   }
 };
 
-// ─── FinalTable ───────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// FinalTable
+// ═══════════════════════════════════════════════════════════════════
 function FinalTable({ category, rows, checkedIds, onToggle, onToggleAll }) {
-  const cols    = COLUMNS[category] || COLUMNS.area;
-  const allIds  = rows.map(r => r.id);
-  const allChk  = allIds.length > 0 && checkedIds.length === allIds.length;
+  const cols   = COLUMNS[category] || COLUMNS.area;
+  const allIds = rows.map((r) => r.id);
+  const allChk = allIds.length > 0 && checkedIds.length === allIds.length;
   const someChk = checkedIds.length > 0 && !allChk;
 
   return (
-    <table className="w-full text-sm text-left" style={{ minWidth: 920 }}>
-      <thead className="bg-blue-600 text-white text-xs uppercase tracking-wider">
+    <table className="ucr-table">
+      <thead>
         <tr>
-          <th className="py-3.5 px-5 w-14 text-center">
+          <th style={{ width: 40, textAlign: "center" }}>
             <IndeterminateCheckbox
-              checked={allChk} indeterminate={someChk}
-              onChange={() => onToggleAll(allIds)} light
+              checked={allChk}
+              indeterminate={someChk}
+              onChange={() => onToggleAll(allIds)}
             />
           </th>
-          {cols.map(c => (
-            <th key={c.key} className="py-3.5 px-5 font-semibold whitespace-nowrap text-center">
-              {c.label}
-            </th>
+          {cols.map((c) => (
+            <th key={c.key}>{c.label}</th>
           ))}
         </tr>
       </thead>
-      <tbody className="divide-y divide-gray-100">
-        {rows.length === 0
-          ? <EmptyRow cols={cols.length + 1} />
-          : rows.map((row, i) => {
+      <tbody>
+        {rows.length === 0 ? (
+          <EmptyRow cols={cols.length + 1} />
+        ) : (
+          rows.map((row) => {
             const checked = checkedIds.includes(row.id);
             return (
-              <tr key={row.id} onClick={() => onToggle(row.id)}
-                className={`cursor-pointer transition-colors ${
-                  checked
-                    ? "bg-blue-50/70"
-                    : i % 2 !== 0
-                      ? "bg-gray-50/40 hover:bg-blue-50/30"
-                      : "bg-white hover:bg-blue-50/20"
-                }`}>
-                <td className="py-3.5 px-5 text-center" onClick={e => e.stopPropagation()}>
-                  <input type="checkbox" checked={checked} onChange={() => onToggle(row.id)}
-                    className="w-4 h-4 rounded accent-blue-600 cursor-pointer" />
+              <tr
+                key={row.id}
+                onClick={() => onToggle(row.id)}
+                style={{ cursor: "pointer", background: checked ? "#eff6ff" : "transparent" }}
+              >
+                <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => onToggle(row.id)}
+                    style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#2563eb" }}
+                  />
                 </td>
-                {cols.map(c => (
-                  <td key={c.key} className="py-3.5 px-5 text-gray-600 text-center whitespace-nowrap">
-                    {getValue(row, c.key)}
-                  </td>
+                {cols.map((c) => (
+                  <td key={c.key}>{getValue(row, c.key)}</td>
                 ))}
               </tr>
             );
           })
-        }
+        )}
       </tbody>
     </table>
   );
 }
 
-// ─── IndeterminateCheckbox ────────────────────────────────────────────────────
-function IndeterminateCheckbox({ checked, indeterminate, onChange, light }) {
+// ═══════════════════════════════════════════════════════════════════
+// IndeterminateCheckbox
+// ═══════════════════════════════════════════════════════════════════
+function IndeterminateCheckbox({ checked, indeterminate, onChange }) {
   return (
-    <div onClick={e => { e.stopPropagation(); onChange(); }}
-      className={`w-[17px] h-[17px] rounded border-2 flex items-center justify-center
-        cursor-pointer transition-all mx-auto
-        ${checked || indeterminate
-          ? light ? "border-white bg-white" : "border-blue-500 bg-blue-500"
-          : light ? "border-white/60 bg-transparent hover:border-white" : "border-gray-300 bg-white hover:border-blue-400"
-        }`}>
-      {indeterminate && !checked
-        ? <div className={`w-2 h-0.5 rounded-full ${light ? "bg-blue-500" : "bg-white"}`} />
-        : checked
-          ? <svg viewBox="0 0 12 10" className={`w-2.5 h-2 ${light ? "text-blue-500" : "text-white"}`} fill="none">
-              <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          : null
-      }
+    <div
+      onClick={(e) => { e.stopPropagation(); onChange(); }}
+      style={{
+        width: 17, height: 17, borderRadius: 4,
+        border: `2px solid ${checked || indeterminate ? "#2563eb" : "#d1d5db"}`,
+        background: checked || indeterminate ? "#2563eb" : "#fff",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "pointer", margin: "0 auto", transition: "all 0.15s",
+      }}
+    >
+      {indeterminate && !checked ? (
+        <div style={{ width: 8, height: 2, borderRadius: 2, background: "#fff" }} />
+      ) : checked ? (
+        <svg viewBox="0 0 12 10" style={{ width: 10, height: 8, color: "#fff" }} fill="none">
+          <path
+            d="M1 5l3.5 3.5L11 1"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : null}
     </div>
   );
 }
 
-// ─── ActionBtn ────────────────────────────────────────────────────────────────
-function ActionBtn({ onClick, disabled, className, icon, label, loading }) {
+// ═══════════════════════════════════════════════════════════════════
+// ActionBtn
+// ═══════════════════════════════════════════════════════════════════
+function ActionBtn({ onClick, disabled, color, icon, label, loading }) {
+  const colorMap = {
+    blue: { background: "#2563eb", color: "#fff", border: "none" },
+    red:  { background: "#fff",    color: "#dc2626", border: "1px solid #fecaca" },
+    gray: { background: "#374151", color: "#fff",    border: "none" },
+  };
+  const s = colorMap[color] || colorMap.gray;
+
   return (
-    <button onClick={onClick} disabled={disabled}
-      className={`flex items-center gap-2 px-7 py-2.5 rounded-lg text-sm font-bold
-        transition-all active:scale-95
-        ${disabled ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none" : className}`}>
-      {loading ? <Loader2 size={15} className="animate-spin" /> : icon}
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "8px 24px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+        background: disabled ? "#f3f4f6" : s.background,
+        color: disabled ? "#9ca3af" : s.color,
+        border: disabled ? "none" : s.border,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.7 : 1,
+        minWidth: 100,
+      }}
+    >
+      {loading
+        ? <Loader2 size={14} style={{ animation: "ucr-spin 1s linear infinite" }} />
+        : icon}
       {label}
     </button>
   );
 }
 
-// ─── Table helpers ────────────────────────────────────────────────────────────
-function Th({ children, center }) {
-  return (
-    <th className={`py-3.5 px-5 font-semibold whitespace-nowrap text-xs uppercase tracking-wider
-      ${center ? "text-center" : "text-left"}`}>
-      {children}
-    </th>
-  );
-}
-
-function Td({ children, center }) {
-  return (
-    <td className={`py-3.5 px-5 text-gray-600 whitespace-nowrap ${center ? "text-center" : ""}`}>
-      {children}
-    </td>
-  );
-}
-
+// ─── EmptyRow ─────────────────────────────────────────────────────────────────
 function EmptyRow({ cols }) {
   return (
     <tr>
-      <td colSpan={cols} className="py-14 text-center text-gray-400 text-sm bg-gray-50/30">
-        <ClipboardList size={28} className="mx-auto mb-2 text-gray-300" />
-        <p className="font-medium">No records found.</p>
+      <td
+        colSpan={cols}
+        style={{ padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <ClipboardList size={28} style={{ color: "#d1d5db" }} />
+          <p style={{ margin: 0, fontWeight: 500 }}>No records found.</p>
+        </div>
       </td>
     </tr>
   );

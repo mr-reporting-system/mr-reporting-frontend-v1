@@ -1,9 +1,72 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Loader2, CheckCircle2, AlertCircle, ChevronDown, Check, Trash2, Edit2, MapPin } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  ChevronDown,
+  Check,
+  Trash2,
+  Edit2,
+  MapPin,
+  Save,
+  Users,
+  Filter,
+} from "lucide-react";
 import api from "../../../services/api";
 
+// ─── Global responsive styles ─────────────────────────────────────────────────
+const STYLES = `
+  *, *::before, *::after { box-sizing: border-box; }
+  .ucr-wrap  { width:100%; padding-bottom:48px; font-family:Inter,sans-serif; overflow-x: hidden; }
+  .ucr-card  { background:#fff; border-radius:16px; box-shadow:0 1px 4px rgba(0,0,0,0.07); border:1px solid #f3f4f6; overflow:visible; margin-bottom: 24px; }
+  .ucr-header{ padding:16px 20px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:12px; }
+  .ucr-body  { padding:24px; }
+  .ucr-footer{ padding:14px 24px; background:#f9fafb; border-top:1px solid #f3f4f6; display:flex; align-items:center; justify-content:flex-end; border-radius:0 0 16px 16px; flex-wrap: wrap; gap: 12px; }
+  .ucr-divider{ border:none; border-top:1px solid #f3f4f6; margin:24px 0; }
+
+  /* Responsive Table Scroll Logic */
+  .ucr-table-container {
+    border: 1px solid #f3f4f6;
+    border-radius: 12px;
+    overflow-x: auto;
+    background: #fff;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ucr-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 800px; }
+  .ucr-table thead { background: #f3f4f6; }
+  .ucr-table th { padding: 13px 16px; text-align: left; font-weight: 700; color: #374151; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; border-bottom: 1px solid #e5e7eb; }
+  .ucr-table tbody tr:nth-child(even) { background: #f9fafb; }
+  .ucr-table tbody tr:nth-child(odd) { background: #ffffff; }
+  .ucr-table tbody tr:hover { background: #f3f4f6; transition: background 0.15s; }
+  .ucr-table td { padding: 12px 16px; color: #374151; border-bottom: 1px solid #f3f4f6; white-space: nowrap; font-size: 13px; }
+
+  /* Grid Layouts */
+  .ucr-grid  { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-bottom:28px; }
+  .filter-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; align-items:flex-end; }
+
+  @media(max-width:1024px){
+    .ucr-grid  { grid-template-columns:repeat(2,1fr); gap:16px; }
+    .filter-grid { grid-template-columns:repeat(2,1fr); }
+    .ucr-body  { padding:18px; }
+  }
+  @media(max-width:600px){
+    .ucr-grid, .filter-grid { grid-template-columns:1fr; gap:12px; }
+    .ucr-body  { padding:14px; }
+    .ucr-header { padding: 12px 16px; }
+    .ucr-footer { justify-content: center; }
+    .ucr-submit-btn { width:100%; justify-content:center; }
+  }
+  @keyframes ucr-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+`;
+
+// ─── Field height ─────────────────────────────────────────────────────────────
+const FH = 40;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────────────────────────────────
 export default function STPCreation() {
-  // ── UI State ──
+  // ── UI State ──────────────────────────────────────────────────────────────
   const [error, setError] = useState("");
   const [popup, setPopup] = useState({ isOpen: false, message: "" });
   const [isLoading, setIsLoading] = useState(false);
@@ -11,30 +74,30 @@ export default function STPCreation() {
   const [filterToggle, setFilterToggle] = useState(true);
   const [editingStpId, setEditingStpId] = useState(null);
 
-  // ── Dropdown Data ──
+  // ── Dropdown Data ─────────────────────────────────────────────────────────
   const [designations, setDesignations] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [areas, setAreas] = useState([]);
 
-  // ── Selections ──
+  // ── Selections ────────────────────────────────────────────────────────────
   const [selectedDesignationId, setSelectedDesignationId] = useState("");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
 
-  // ── Form State ──
+  // ── Form State ────────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
     fromArea: "",
     toArea: "",
-    type: "", 
+    type: "",
     frc: "",
     distance: "",
-    frequencyVisit: ""
+    frequencyVisit: "",
   });
 
-  // ── Table Data ──
+  // ── Table Data ────────────────────────────────────────────────────────────
   const [stpData, setStpData] = useState([]);
   const [selectedStpIds, setSelectedStpIds] = useState([]);
 
-  // ── Initial Fetch ──
+  // ── Initial Fetch ─────────────────────────────────────────────────────────
   useEffect(() => {
     fetchDesignations();
   }, []);
@@ -49,7 +112,6 @@ export default function STPCreation() {
     }
   };
 
-  // ── Fetch Employees when Designation Changes ──
   useEffect(() => {
     if (selectedDesignationId) {
       fetchEmployees(selectedDesignationId);
@@ -69,7 +131,6 @@ export default function STPCreation() {
     }
   };
 
-  // ── Fetch Areas and STP Data when Employee Changes ──
   useEffect(() => {
     if (selectedEmployeeId) {
       fetchAreasAndStpData(selectedEmployeeId);
@@ -99,60 +160,53 @@ export default function STPCreation() {
     }
   };
 
-  // ── Form Handlers ──
+  // ── Form Handlers ─────────────────────────────────────────────────────────
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
-    setFormData(prev => {
+    setFormData((prev) => {
       const newData = { ...prev, [name]: value };
-      
       if (name === "fromArea" && value && !editingStpId) {
-        const selectedAreaObj = areas.find(a => (a.area?.id || a.id).toString() === value.toString());
+        const selectedAreaObj = areas.find(
+          (a) => (a.area?.id || a.id).toString() === value.toString()
+        );
         if (selectedAreaObj) {
           const targetObj = selectedAreaObj.area || selectedAreaObj;
           const areaType = targetObj.type || targetObj.area_type || targetObj.areaType;
-          if (areaType) {
-            newData.type = areaType;
-          }
+          if (areaType) newData.type = areaType;
         }
       }
-      
       return newData;
     });
   };
 
   const handleFrcChange = (e) => {
     const numbersOnly = e.target.value.replace(/\D/g, "");
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      frc: numbersOnly ? `Days: ${numbersOnly}` : ""
+      frc: numbersOnly ? `Days: ${numbersOnly}` : "",
     }));
   };
 
   const handleEditClick = (item) => {
     setEditingStpId(item.id);
-    
     const fromAreaId = item.fromArea?.id || item.fromAreaId || "";
     const toAreaId = item.toArea?.id || item.toAreaId || "";
     const areaType = item.areaType || item.type || "";
-    
+
     setFormData({
       fromArea: fromAreaId.toString(),
       toArea: toAreaId.toString(),
       type: areaType,
       frc: item.frc ? `Days: ${item.frc}` : "",
       distance: item.distance || "",
-      frequencyVisit: item.frequencyVisit || ""
+      frequencyVisit: item.frequencyVisit || "",
     });
-    
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSaveStp = async (e) => {
     e.preventDefault();
-    if (!selectedEmployeeId) return;
-
-    if (isSubmitting) return;
+    if (!selectedEmployeeId || isSubmitting) return;
 
     setError("");
     setIsSubmitting(true);
@@ -166,7 +220,7 @@ export default function STPCreation() {
         areaType: formData.type,
         frc: parseInt(String(formData.frc).replace(/\D/g, "")) || 0,
         distance: parseFloat(formData.distance),
-        frequencyVisit: parseInt(formData.frequencyVisit)
+        frequencyVisit: parseInt(formData.frequencyVisit),
       };
 
       let res;
@@ -177,12 +231,13 @@ export default function STPCreation() {
       }
 
       if (res.data?.success || res.status === 200 || res.status === 201) {
-        setPopup({ isOpen: true, message: editingStpId ? "STP Updated Successfully!" : "STP Created Successfully!" });
+        setPopup({
+          isOpen: true,
+          message: editingStpId ? "STP Updated Successfully!" : "STP Created Successfully!",
+        });
         setFormData({ fromArea: "", toArea: "", type: "", frc: "", distance: "", frequencyVisit: "" });
         setEditingStpId(null);
-        fetchAreasAndStpData(selectedEmployeeId); 
-      } else {
-        setError(res.data?.message || "Failed to save STP.");
+        fetchAreasAndStpData(selectedEmployeeId);
       }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to save STP.");
@@ -192,17 +247,15 @@ export default function STPCreation() {
   };
 
   const handleDeleteStp = async () => {
-    if (selectedStpIds.length === 0) return;
-    
+    if (selectedStpIds.length === 0 || isSubmitting) return;
     setError("");
     setIsSubmitting(true);
 
     try {
       await api.post("/api/masters/stps/delete", { stpIds: selectedStpIds });
-      
       setPopup({ isOpen: true, message: "STP Deleted Successfully!" });
       setSelectedStpIds([]);
-      fetchAreasAndStpData(selectedEmployeeId); 
+      fetchAreasAndStpData(selectedEmployeeId);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to delete STP.");
     } finally {
@@ -210,223 +263,289 @@ export default function STPCreation() {
     }
   };
 
-  // ── Checkbox Handlers ──
-  const toggleStpRow = (id) => setSelectedStpIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  const toggleAllStpRows = (e) => setSelectedStpIds(e.target.checked ? stpData.map(item => item.id) : []);
+  // ── Checkbox ──────────────────────────────────────────────────────────────
+  const toggleStpRow = (id) =>
+    setSelectedStpIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
 
-  const isFormValid = formData.fromArea && formData.toArea && formData.type && formData.distance && formData.frequencyVisit && selectedEmployeeId;
+  const toggleAllStpRows = (e) =>
+    setSelectedStpIds(e.target.checked ? stpData.map((item) => item.id) : []);
+
+  const isFormValid =
+    formData.fromArea &&
+    formData.toArea &&
+    formData.type &&
+    formData.distance &&
+    formData.frequencyVisit &&
+    selectedEmployeeId;
 
   const getAreaProps = (a) => {
     const id = a.area?.id || a.id;
-    const name = a.area?.name || a.area?.areaName || a.area?.area_name || a.name || a.areaName || a.area_name || "Unknown Area";
+    const name =
+      a.area?.name ||
+      a.area?.areaName ||
+      a.area?.area_name ||
+      a.name ||
+      a.areaName ||
+      a.area_name ||
+      "Unknown Area";
     return { id, name };
   };
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-500 pb-8 px-2 sm:px-0">
-      
-      {/* ── TOP HEADER & FILTERS ── */}
-      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-          <h2 className="text-lg font-bold text-gray-800">STP Creation</h2>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setFilterToggle(!filterToggle)}
-              className={`w-10 h-5 rounded-full relative transition-colors ${filterToggle ? 'bg-blue-500/90' : 'bg-gray-300'}`}
-            >
-              <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${filterToggle ? 'left-5' : 'left-1'}`} />
-            </button>
-            <span className="text-sm font-semibold text-gray-600">Filter</span>
+    <div className="ucr-wrap">
+      <style>{STYLES}</style>
+
+      {/* Alerts */}
+      {error && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 16px", color: "#dc2626", fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+
+      {/* Header & Filters Card */}
+      <div className="ucr-card">
+        <div className="ucr-header">
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "#eff6ff", border: "1px solid #dbeafe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Filter size={17} style={{ color: "#2563eb" }} />
           </div>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0 }}>STP Creation</h2>
+            <p style={{ fontSize: 11, color: "#6b7280", margin: 0, marginTop: 2 }}>Manage Standard Tour Plans for employees</p>
+          </div>
+          <button
+            onClick={() => setFilterToggle(!filterToggle)}
+            style={{ background: "none", border: "none", cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#6b7280" }}>FILTER</span>
+              <div style={{ width: 34, height: 18, borderRadius: 20, background: filterToggle ? "#2563eb" : "#d1d5db", position: "relative", cursor: "pointer", transition: "0.2s" }}>
+                <div style={{ width: 14, height: 14, background: "#fff", borderRadius: "50%", position: "absolute", top: 2, left: filterToggle ? 18 : 2, transition: "0.2s" }} />
+              </div>
+            </div>
+          </button>
         </div>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 px-3 py-2 text-sm rounded-md mb-4 border border-red-100 flex items-center gap-2">
-            <AlertCircle size={14} /> {error}
-          </div>
-        )}
-
         {filterToggle && (
-          <div className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="w-full md:w-1/3">
-              <CustomBlueSelect 
-                label="SELECT DESIGNATION" 
-                value={selectedDesignationId} 
+          <div className="ucr-body">
+            <div className="filter-grid">
+              <FSelect
+                label="Select Designation"
+                value={selectedDesignationId}
                 onChange={(e) => {
                   setSelectedDesignationId(e.target.value);
                   setSelectedEmployeeId("");
-                }} 
-              >
-                <option value=""></option>
-                {designations.map(d => <option key={d.id} value={d.id}>{d.designation_name || d.name}</option>)}
-              </CustomBlueSelect>
-            </div>
-
-            <div className="w-full md:w-1/3">
-              <CustomBlueSelect 
-                label="EMPLOYEE NAME" 
-                value={selectedEmployeeId} 
+                }}
+                options={designations.map((d) => ({ id: d.id, label: d.designation_name || d.name }))}
+              />
+              <FSelect
+                label="Employee Name"
+                value={selectedEmployeeId}
                 disabled={!selectedDesignationId}
-                onChange={(e) => setSelectedEmployeeId(e.target.value)} 
-              >
-                <option value=""></option>
-                {employees.map(e => <option key={e.id} value={e.id}>{e.name || e.employee_name}</option>)}
-              </CustomBlueSelect>
+                onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                options={employees.map((e) => ({ id: e.id, label: e.name || e.employee_name }))}
+              />
             </div>
           </div>
         )}
       </div>
 
-      {/* ── CREATE STP FORM ── */}
-      <div className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden transition-all ${selectedEmployeeId ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-          <h3 className="font-bold text-gray-700">{editingStpId ? "Edit STP" : "Create STP"}</h3>
+      {/* Form Card */}
+      <div
+        className="ucr-card"
+        style={{ opacity: selectedEmployeeId ? 1 : 0.6, pointerEvents: selectedEmployeeId ? "auto" : "none" }}
+      >
+        <div className="ucr-header">
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "#eff6ff", border: "1px solid #dbeafe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <MapPin size={17} style={{ color: "#2563eb" }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111827", margin: 0 }}>
+              {editingStpId ? "Edit STP Details" : "New STP Details"}
+            </h2>
+          </div>
           {editingStpId && (
-            <button 
-              type="button"
+            <button
               onClick={() => {
                 setEditingStpId(null);
                 setFormData({ fromArea: "", toArea: "", type: "", frc: "", distance: "", frequencyVisit: "" });
               }}
-              className="text-xs text-red-500 hover:text-red-700 font-bold transition-colors"
+              style={{ background: "none", border: "none", color: "#dc2626", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
             >
-              Cancel Edit
+              CANCEL EDIT
             </button>
           )}
         </div>
-        
-        <form onSubmit={handleSaveStp} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <CustomBlueSelect label="FROM AREA" name="fromArea" value={formData.fromArea} onChange={handleInputChange}>
-              <option value=""></option>
-              {areas.map(a => {
-                const { id, name } = getAreaProps(a);
-                return <option key={id} value={id}>{name}</option>;
-              })}
-            </CustomBlueSelect>
 
-            <CustomBlueSelect label="TO AREA" name="toArea" value={formData.toArea} onChange={handleInputChange}>
-              <option value=""></option>
-              {areas.map(a => {
-                const { id, name } = getAreaProps(a);
-                return <option key={id} value={id}>{name}</option>;
-              })}
-            </CustomBlueSelect>
-
-            <CustomBlueSelect label="TYPE" name="type" value={formData.type} onChange={handleInputChange}>
-              <option value=""></option>
-              <option value="HQ">HQ</option>
-              <option value="EX">EX</option>
-            </CustomBlueSelect>
-
-            <FloatingInput label="FRC (e.g. 15)" name="frc" value={formData.frc} onChange={handleFrcChange} placeholder="Enter days..." />
-            <FloatingInput label="DISTANCE" name="distance" type="number" value={formData.distance} onChange={handleInputChange} />
-            <FloatingInput label="FREQUENCY VISIT" name="frequencyVisit" type="number" value={formData.frequencyVisit} onChange={handleInputChange} />
+        <form onSubmit={handleSaveStp}>
+          <div className="ucr-body">
+            <div className="ucr-grid">
+              <FSelect
+                label="From Area"
+                name="fromArea"
+                value={formData.fromArea}
+                onChange={handleInputChange}
+                options={areas.map((a) => { const { id, name } = getAreaProps(a); return { id, label: name }; })}
+              />
+              <FSelect
+                label="To Area"
+                name="toArea"
+                value={formData.toArea}
+                onChange={handleInputChange}
+                options={areas.map((a) => { const { id, name } = getAreaProps(a); return { id, label: name }; })}
+              />
+              <FSelect
+                label="Type"
+                name="type"
+                value={formData.type}
+                onChange={handleInputChange}
+                options={[{ id: "HQ", label: "HQ" }, { id: "EX", label: "EX" }]}
+              />
+              <FInput label="FRC (e.g. 15)" name="frc" value={formData.frc} onChange={handleFrcChange} />
+              <FInput label="Distance" name="distance" type="number" value={formData.distance} onChange={handleInputChange} />
+              <FInput label="Frequency Visit" name="frequencyVisit" type="number" value={formData.frequencyVisit} onChange={handleInputChange} />
+            </div>
           </div>
 
-          <div className="flex">
-            <button 
-              type="submit" 
+          <div className="ucr-footer">
+            <button
+              type="submit"
               disabled={!isFormValid || isSubmitting}
-              className={`px-8 py-2.5 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 
-                ${isFormValid ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md active:scale-95' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+              className="ucr-submit-btn"
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "8px 24px", borderRadius: 9,
+                fontSize: 13, fontWeight: 700, border: "none",
+                cursor: !isFormValid || isSubmitting ? "not-allowed" : "pointer",
+                background: "#2563eb", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.25)",
+                opacity: !isFormValid || isSubmitting ? 0.6 : 1, transition: "all 0.15s",
+              }}
             >
-              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={3} />} 
+              {isSubmitting
+                ? <Loader2 size={14} style={{ animation: "ucr-spin 1s linear infinite" }} />
+                : <Save size={14} />
+              }
               {editingStpId ? "Update STP" : "Add STP"}
             </button>
           </div>
         </form>
       </div>
 
-      {/* ── STP DATA TABLE ── */}
+      {/* Table Card */}
       {selectedEmployeeId && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in slide-in-from-bottom-2 duration-300">
-          <div className="p-4 border-b border-gray-100 text-white">
-            <h3 className="font-bold text-sm tracking-wide text-black">STP Data</h3>
+        <div className="ucr-card">
+          <div className="ucr-header" style={{ background: "#f9fafb" }}>
+            <h3 style={{ fontSize: 12, fontWeight: 700, color: "#4b5563" }}>STP DATA</h3>
           </div>
 
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="bg-blue-500 text-white border-t border-blue-600">
-                <tr>
-                  <th className="w-12 py-3 px-4 text-center">
-                    <input 
-                      type="checkbox" 
-                      onChange={toggleAllStpRows} 
-                      checked={stpData.length > 0 && selectedStpIds.length === stpData.length} 
-                      className="w-3.5 h-3.5 rounded text-blue-800 cursor-pointer border-white focus:ring-white" 
-                    />
-                  </th>
-                  <th className="py-3 px-4 font-semibold text-xs uppercase">No.</th>
-                  <th className="py-3 px-4 font-semibold text-xs uppercase">From Area</th>
-                  <th className="py-3 px-4 font-semibold text-xs uppercase">To Area</th>
-                  <th className="py-3 px-4 font-semibold text-xs uppercase">Type</th>
-                  <th className="py-3 px-4 font-semibold text-xs uppercase">Distance</th>
-                  <th className="py-3 px-4 font-semibold text-xs uppercase">Frequency Visit</th>
-                  <th className="py-3 px-4 font-semibold text-xs uppercase text-center">Edit Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {isLoading ? (
-                  <tr><td colSpan="8" className="py-12 text-center"><Loader2 className="animate-spin mx-auto text-blue-500" /></td></tr>
-                ) : stpData.length === 0 ? (
-                  <tr><td colSpan="8" className="py-12 text-center text-gray-400">No STP data found for this employee.</td></tr>
-                ) : (
-                  stpData.map((item, index) => (
-                    <tr key={item.id} className={`transition-colors hover:bg-blue-50/30 ${selectedStpIds.includes(item.id) ? 'bg-blue-50/50' : ''}`}>
-                      <td className="py-3 px-4 text-center">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedStpIds.includes(item.id)} 
-                          onChange={() => toggleStpRow(item.id)} 
-                          className="w-3.5 h-3.5 rounded text-blue-500 cursor-pointer border-gray-300 focus:ring-blue-500" 
-                        />
-                      </td>
-                      <td className="py-3 px-4 text-gray-500 text-xs">{index + 1}</td>
-                      <td className="py-3 px-4 text-gray-600 font-medium">{item.fromArea?.name || item.fromArea?.areaName || item.fromAreaName || "—"}</td>
-                      <td className="py-3 px-4 text-gray-600 font-medium">{item.toArea?.name || item.toArea?.areaName || item.toAreaName || "—"}</td>
-                      <td className="py-3 px-4 text-gray-800">{item.areaType || item.type || "—"}</td>
-                      <td className="py-3 px-4 text-gray-600">{item.distance}</td>
-                      <td className="py-3 px-4 text-gray-600">{item.frequencyVisit}</td>
-                      <td className="py-3 px-4 flex justify-center">
-                        <button 
-                          onClick={() => handleEditClick(item)} 
-                          className="text-blue-500 hover:text-blue-700 transition-colors" 
-                          title="Edit"
-                        >
-                          <Edit2 size={16} />
-                        </button>
+          <div className="ucr-body">
+            <div className="ucr-table-container">
+              <table className="ucr-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40, textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        onChange={toggleAllStpRows}
+                        checked={stpData.length > 0 && selectedStpIds.length === stpData.length}
+                      />
+                    </th>
+                    <th>No.</th>
+                    <th>From Area</th>
+                    <th>To Area</th>
+                    <th>Type</th>
+                    <th>Distance</th>
+                    <th>Frequency</th>
+                    <th>Edit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: "center", padding: 40 }}>
+                        <Loader2 style={{ animation: "ucr-spin 1s linear infinite", color: "#2563eb" }} />
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : stpData.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+                        No STP data found.
+                      </td>
+                    </tr>
+                  ) : (
+                    stpData.map((item, index) => (
+                      <tr
+                        key={item.id}
+                        style={{ background: selectedStpIds.includes(item.id) ? "#eff6ff" : undefined }}
+                      >
+                        <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedStpIds.includes(item.id)}
+                            onChange={() => toggleStpRow(item.id)}
+                          />
+                        </td>
+                        <td style={{ color: "#6b7280" }}>{index + 1}</td>
+                        <td style={{ fontWeight: 600, color: "#111827" }}>
+                          {item.fromArea?.name || item.fromArea?.areaName || item.fromAreaName || "—"}
+                        </td>
+                        <td style={{ fontWeight: 600, color: "#111827" }}>
+                          {item.toArea?.name || item.toArea?.areaName || item.toAreaName || "—"}
+                        </td>
+                        <td>{item.areaType || item.type || "—"}</td>
+                        <td>{item.distance}</td>
+                        <td>{item.frequencyVisit}</td>
+                        <td>
+                          <button
+                            onClick={() => handleEditClick(item)}
+                            style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", display: "flex", alignItems: "center" }}
+                          >
+                            <Edit2 size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="p-4 border-t border-gray-100 bg-gray-50">
-            <button 
+          {/* Delete footer */}
+          <div className="ucr-footer" style={{ justifyContent: "flex-start" }}>
+            <button
               onClick={handleDeleteStp}
               disabled={selectedStpIds.length === 0 || isSubmitting}
-              className={`px-6 py-2.5 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 
-                ${(selectedStpIds.length > 0) ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-md active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "8px 20px",
+                borderRadius: 8, fontSize: 13, fontWeight: 700,
+                border: "1px solid #fecaca", background: "#fff", color: "#dc2626",
+                cursor: selectedStpIds.length === 0 ? "not-allowed" : "pointer",
+                opacity: selectedStpIds.length === 0 ? 0.6 : 1, minWidth: 90,
+              }}
             >
-              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} 
-              Delete STP
+              {isSubmitting
+                ? <Loader2 size={14} style={{ animation: "ucr-spin 1s linear infinite" }} />
+                : <Trash2 size={14} />
+              }
+              Delete Selected
             </button>
           </div>
         </div>
       )}
 
-      {/* 🌟 SUCCESS POPUP 🌟 */}
+      {/* Success Popup */}
       {popup.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-[2px] animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-xs w-full mx-4 flex flex-col items-center animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 border-2 border-blue-100 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 size={32} className="text-blue-500/80" strokeWidth={3} />
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, maxWidth: 320, width: "90%", textAlign: "center", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#eff6ff", border: "2px solid #dbeafe", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <CheckCircle2 size={32} style={{ color: "#2563eb" }} />
             </div>
-            <h3 className="text-lg font-bold text-gray-800 text-center mb-6">{popup.message}</h3>
-            <button onClick={() => setPopup({ isOpen: false, message: "" })} className="bg-blue-500/90 hover:bg-blue-600/90 text-white w-full py-2.5 rounded-lg font-bold shadow-sm transition-all active:scale-95">
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: "0 0 24px" }}>{popup.message}</h3>
+            <button
+              onClick={() => setPopup({ isOpen: false, message: "" })}
+              style={{ background: "#2563eb", color: "#fff", border: "none", padding: "10px 0", width: "100%", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}
+            >
               Done
             </button>
           </div>
@@ -436,85 +555,112 @@ export default function STPCreation() {
   );
 }
 
-// ─── Reusable Components ───
-
-function FloatingInput({ label, name, type = "text", value, onChange, disabled, placeholder }) {
-  const [isFocused, setIsFocused] = useState(false);
-  const hasValue = Boolean(value);
-
-  const borderClass = disabled
-    ? "border-gray-200 bg-gray-50 cursor-not-allowed"
-    : hasValue || isFocused
-      ? "border-blue-500 ring-1 ring-blue-100"
-      : "border-gray-300";
-
-  const labelClass = disabled
-    ? hasValue ? "-top-2.5 text-[11px] text-gray-400" : "top-2.5 text-sm text-gray-400"
-    : hasValue || isFocused
-      ? "-top-2.5 text-[11px] text-blue-600"
-      : "top-2.5 text-sm text-gray-500";
+// ═══════════════════════════════════════════════════════════════════
+// FInput — floating label text input
+// ═══════════════════════════════════════════════════════════════════
+function FInput({ label, name, type = "text", value, onChange, disabled }) {
+  const [focus, setFocus] = useState(false);
+  const active = focus || Boolean(value?.toString().trim());
 
   return (
-    <div className="relative w-full">
+    <div style={{ position: "relative", width: "100%", height: FH }}>
       <input
-        type={type} id={name} name={name} value={value || ""} onChange={onChange} disabled={disabled}
-        placeholder={isFocused ? placeholder : " "}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        className={`w-full rounded-md border px-3 py-2.5 text-sm text-gray-900 transition-all focus:outline-none ${borderClass} ${disabled ? "text-gray-400" : ""}`}
+        type={type}
+        id={name}
+        name={name}
+        value={value || ""}
+        onChange={onChange}
+        disabled={disabled}
+        onFocus={() => setFocus(true)}
+        onBlur={() => setFocus(false)}
+        style={{
+          width: "100%", height: "100%", borderRadius: 8, padding: "0 12px",
+          fontSize: 13, color: "#111827", outline: "none",
+          background: disabled ? "#f9fafb" : "#fff",
+          border: `1.5px solid ${focus ? "#2563eb" : "#d1d5db"}`,
+          transition: "all 0.15s",
+        }}
       />
-      <label htmlFor={name} className={`absolute left-2.5 px-1 bg-white pointer-events-none z-10 transition-all duration-200 font-semibold ${labelClass}`}>
+      <label
+        style={{
+          position: "absolute", left: 10, pointerEvents: "none", transition: "all 0.15s", fontWeight: 600,
+          top: active ? -9 : 10, fontSize: active ? 10 : 12,
+          color: focus ? "#2563eb" : "#9ca3af",
+          background: active ? "#fff" : "transparent",
+          padding: active ? "0 4px" : "0",
+        }}
+      >
         {label}
       </label>
     </div>
   );
 }
 
-function CustomBlueSelect({ label, name, value, onChange, disabled, children }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-  
-  const options = React.Children.map(children, child => {
-    if (!React.isValidElement(child)) return null;
-    return { value: child.props.value, label: child.props.children };
-  }).filter(Boolean);
-  const selectedOption = options.find(opt => opt.value == value);
+// ═══════════════════════════════════════════════════════════════════
+// FSelect — floating label dropdown
+// ═══════════════════════════════════════════════════════════════════
+function FSelect({ label, name, value, onChange, disabled, options = [] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsOpen(false);
+    const h = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  return (
-    <div ref={dropdownRef} className="relative w-full group select-none">
-      <select name={name} value={value || ""} onChange={(e) => onChange(e)} className="hidden" readOnly>
-        <option value={value}>{value}</option>
-      </select>
+  const selected = options.find((o) => String(o.id) === String(value));
+  const active = open || Boolean(value);
 
-      <div 
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`w-full rounded-md border px-3 py-2.5 text-sm flex items-center justify-between cursor-pointer transition-all relative z-10
-          ${disabled ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed' : 'border-gray-300 bg-white hover:border-blue-400/60'}
-          ${isOpen || value ? 'border-blue-500/80 ring-1 ring-blue-50' : ''}`}
+  return (
+    <div ref={ref} style={{ position: "relative", width: "100%" }}>
+      <div
+        onClick={() => !disabled && setOpen(!open)}
+        style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 34px 0 12px",
+          fontSize: 13, display: "flex", alignItems: "center",
+          cursor: disabled ? "not-allowed" : "pointer",
+          background: disabled ? "#f9fafb" : "#fff",
+          border: `1.5px solid ${open ? "#2563eb" : "#d1d5db"}`,
+          transition: "all 0.15s",
+        }}
       >
-        <span className={`block truncate ${selectedOption?.value ? 'text-gray-900' : 'text-transparent'}`}>
-          {selectedOption?.label || " "}
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: value ? "#111827" : "transparent" }}>
+          {selected?.label || " "}
         </span>
-        <ChevronDown size={16} className={`${disabled ? 'text-gray-300' : 'text-gray-400 group-hover:text-blue-400/80'} ${isOpen ? '!text-blue-500/80 rotate-180' : ''} transition-transform`} />
+        <ChevronDown
+          size={14}
+          style={{ position: "absolute", right: 10, transform: open ? "rotate(180deg)" : "none", transition: "0.2s", color: "#9ca3af" }}
+        />
       </div>
-      <label className={`absolute left-2.5 px-1 transition-all duration-200 pointer-events-none z-20
-          ${value || isOpen ? '-top-2 text-[10px] font-bold text-blue-600 bg-white' : 'top-3 text-sm text-gray-500 bg-transparent'}
-          ${disabled && '!text-gray-300'}`}>
+      <label
+        style={{
+          position: "absolute", left: 10, pointerEvents: "none", transition: "all 0.15s", fontWeight: 600,
+          top: active ? -9 : 10, fontSize: active ? 10 : 12,
+          color: open ? "#2563eb" : "#9ca3af",
+          background: active ? "#fff" : "transparent",
+          padding: active ? "0 4px" : "0",
+        }}
+      >
         {label}
       </label>
-      {isOpen && !disabled && (
-        <div className="absolute top-[105%] left-0 w-full bg-white border border-gray-100 rounded-md shadow-lg z-[110] max-h-52 overflow-y-auto">
-          <ul className="py-1">
-            {options.map((opt, idx) => opt.value !== "" && (
-              <li key={idx} onClick={() => { onChange({ target: { name, value: opt.value } }); setIsOpen(false); }} className={`px-3 py-2.5 text-xs cursor-pointer transition-colors ${value == opt.value ? 'bg-blue-50 text-blue-600 font-bold border-l-2 border-blue-500/80' : 'text-gray-600 hover:bg-blue-500 hover:text-white'}`}>
+      {open && (
+        <div
+          style={{ position: "absolute", top: "calc(100% + 5px)", left: 0, width: "100%", background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 100, overflow: "hidden" }}
+        >
+          <ul style={{ maxHeight: 200, overflowY: "auto", margin: 0, padding: "4px 0", listStyle: "none" }}>
+            {options.map((opt) => (
+              <li
+                key={opt.id}
+                onClick={() => { onChange({ target: { name, value: opt.id } }); setOpen(false); }}
+                style={{
+                  padding: "8px 12px", fontSize: 13, cursor: "pointer",
+                  background: String(value) === String(opt.id) ? "#eff6ff" : "transparent",
+                  color: String(value) === String(opt.id) ? "#2563eb" : "#374151",
+                }}
+              >
                 {opt.label}
               </li>
             ))}

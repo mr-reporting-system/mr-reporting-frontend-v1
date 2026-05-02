@@ -3,11 +3,11 @@ import {
   Loader2, AlertCircle, ChevronDown, SlidersHorizontal,
   Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   MapPin, Calendar, User, Briefcase, ToggleRight,
-  Check, X, FileSpreadsheet
+  Check, X, FileSpreadsheet, CheckCircle2, ArrowRightLeft
 } from "lucide-react";
 import api from "../../../services/api";
 
-// ─── Month options (number value for API, name for display) ──────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────
 const MONTHS = [
   { value: 1,  label: "January"   }, { value: 2,  label: "February"  },
   { value: 3,  label: "March"     }, { value: 4,  label: "April"     },
@@ -20,7 +20,6 @@ const MONTHS = [
 const YEARS     = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
 const PAGE_SIZE = 10;
 
-// ─── Table columns ────────────────────────────────────────────────────────────
 const TABLE_COLS = [
   { key: "stateName",      label: "State Name" },
   { key: "hqName",         label: "Headquarter Name" },
@@ -35,9 +34,30 @@ const TABLE_COLS = [
   { key: "rejectionMsg",   label: "Rejection Message" },
 ];
 
-const boolStr = v =>
-  v === true  || v === "true"  ? "Yes" :
-  v === false || v === "false" ? "No"  : String(v ?? "—");
+/* ─── Global styles from reference ────────────────────────────────────────── */
+const STYLES = `
+  .ucr-wrap  { width:100%; padding-bottom:48px; font-family:Inter,sans-serif; }
+  .ucr-card  { background:#fff; border-radius:16px; box-shadow:0 1px 4px rgba(0,0,0,0.07); border:1px solid #f3f4f6; overflow:visible; margin-bottom: 24px; }
+  .ucr-header{ padding:16px 20px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:12px; }
+  .ucr-body  { padding:24px; }
+  .ucr-footer{ padding:14px 24px; background:#f9fafb; border-top:1px solid #f3f4f6; display:flex; align-items:center; justify-content:flex-end; border-radius:0 0 16px 16px; }
+  .ucr-grid  { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-bottom:24px; }
+  .ucr-gender-row{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; margin-bottom: 24px; padding: 12px; background: #f9fafb; border-radius: 12px; border: 1px solid #f3f4f6; }
+  
+  @media(max-width:1200px){ .ucr-grid { grid-template-columns:repeat(3,1fr); } }
+  @media(max-width:1024px){ .ucr-grid { grid-template-columns:repeat(2,1fr); gap:16px; } }
+  @media(max-width:600px){ 
+    .ucr-grid { grid-template-columns:1fr; gap:12px; }
+    .ucr-body { padding:14px; }
+    .ucr-submit-btn { width: 100%; justify-content: center; }
+  }
+  @keyframes ucr-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+`;
+
+const FH = 36; // Matching reference file input height
+
+// ─── Logic Helpers ──────────────────────────────────────────────────────────
+const boolStr = v => (v === true || v === "true" ? "Yes" : v === false || v === "false" ? "No" : String(v ?? "—"));
 
 const getVal = (row, key) => ({
   stateName:      row.stateName      || row.state_name      || row.state?.stateName      || "—",
@@ -53,56 +73,42 @@ const getVal = (row, key) => ({
   rejectionMsg:   row.rejectionMessage || row.rejectionMsg  || row.rejection_message || "—",
 }[key] ?? "—");
 
-const H = "h-[46px]"; // shared input height
-
-// ─────────────────────────────────────────────────────────────────────────────
 export default function ApproveTourProgram() {
   const [filterOpen, setFilterOpen] = useState(true);
   const [mode,       setMode]       = useState("geographical");
 
-  // ── Dropdown data ─────────────────────────────────────────────────────────
   const [states,       setStates]       = useState([]);
   const [districts,    setDistricts]    = useState([]);
   const [designations, setDesignations] = useState([]);
   const [employees,    setEmployees]    = useState([]);
 
-  // ── Geographical filters ──────────────────────────────────────────────────
-  // Fields: State(multi) → District(multi) → Month → Year
   const [geoStateIds,   setGeoStateIds]   = useState([]);
   const [geoDistIds,    setGeoDistIds]    = useState([]);
   const [geoMonth,      setGeoMonth]      = useState("");
   const [geoYear,       setGeoYear]       = useState("");
 
-  // ── Hierarchical filters ──────────────────────────────────────────────────
-  // Fields: Designation(one) → Status(one) → Employee(multi) → Month → Year
   const [hierDesignation, setHierDesignation] = useState("");
-  const [hierStatus,      setHierStatus]      = useState("");   // "true" | "false" → isActive
+  const [hierStatus,      setHierStatus]      = useState("");
   const [hierEmployeeIds, setHierEmployeeIds] = useState([]);
   const [hierMonth,       setHierMonth]       = useState("");
   const [hierYear,        setHierYear]        = useState("");
 
-  // ── Table ─────────────────────────────────────────────────────────────────
   const [tableData,    setTableData]    = useState([]);
   const [searchQuery,  setSearchQuery]  = useState("");
   const [currentPage,  setCurrentPage]  = useState(1);
   const [tableVisible, setTableVisible] = useState(false);
 
-  // ── Reject popup ──────────────────────────────────────────────────────────
   const [rejectPopup,  setRejectPopup]  = useState(false);
   const [rejectRow,    setRejectRow]    = useState(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  // ── UI ────────────────────────────────────────────────────────────────────
   const [isLoading,    setIsLoading]    = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error,        setError]        = useState("");
   const [successMsg,   setSuccessMsg]   = useState("");
 
-  // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => { fetchInitialData(); }, []);
 
-  // State selection → fetch districts
-  // GET /api/masters/districts/by-states?stateIds=1,2
   useEffect(() => {
     if (geoStateIds.length > 0) {
       fetchDistricts(geoStateIds);
@@ -113,8 +119,6 @@ export default function ApproveTourProgram() {
     }
   }, [geoStateIds]);
 
-  // Designation + Status → fetch employees
-  // GET /api/approvals/tour-program/employees?designationId=3&isActive=true
   useEffect(() => {
     if (hierDesignation && hierStatus !== "") {
       fetchEmployees(hierDesignation, hierStatus);
@@ -125,7 +129,6 @@ export default function ApproveTourProgram() {
     }
   }, [hierDesignation, hierStatus]);
 
-  // Reset table on mode change
   useEffect(() => {
     setTableVisible(false); setTableData([]);
     setSearchQuery(""); setCurrentPage(1); setError(""); setSuccessMsg("");
@@ -134,8 +137,6 @@ export default function ApproveTourProgram() {
   const fetchInitialData = async () => {
     try {
       setIsLoading(true);
-      // GET /api/masters/states
-      // GET /api/masters/designations
       const [sRes, dRes] = await Promise.all([
         api.get("/api/masters/states"),
         api.get("/api/masters/designations"),
@@ -146,7 +147,6 @@ export default function ApproveTourProgram() {
     finally { setIsLoading(false); }
   };
 
-  // GET /api/masters/districts/by-states?stateIds=1,2
   const fetchDistricts = async (stateIds) => {
     try {
       const res = await api.get(`/api/masters/districts/by-states?stateIds=${stateIds.join(",")}`);
@@ -155,50 +155,31 @@ export default function ApproveTourProgram() {
     } catch { setDistricts([]); }
   };
 
-  // GET /api/approvals/tour-program/employees?designationId=3&isActive=true
   const fetchEmployees = async (designationId, isActive) => {
     try {
-      const res = await api.get(
-        `/api/approvals/tour-program/employees?designationId=${designationId}&isActive=${isActive}`
-      );
+      const res = await api.get(`/api/approvals/tour-program/employees?designationId=${designationId}&isActive=${isActive}`);
       if (res.data?.success) setEmployees(res.data.data || []);
       else setEmployees([]);
     } catch { setEmployees([]); }
   };
 
-  // ── View Status ───────────────────────────────────────────────────────────
   const handleViewStatus = async () => {
     setError(""); setSuccessMsg("");
-
     if (mode === "geographical") {
-      if (!geoStateIds.length) return setError("Please select at least one State.");
-      if (!geoDistIds.length)  return setError("Please select at least one District.");
-      if (!geoMonth)           return setError("Please select a Month.");
-      if (!geoYear)            return setError("Please select a Year.");
+      if (!geoStateIds.length || !geoDistIds.length || !geoMonth || !geoYear) return setError("Please fill all mandatory fields.");
     } else {
-      if (!hierDesignation)        return setError("Please select a Designation.");
-      if (!hierStatus)             return setError("Please select a Status.");
-      if (!hierEmployeeIds.length) return setError("Please select at least one Employee.");
-      if (!hierMonth)              return setError("Please select a Month.");
-      if (!hierYear)               return setError("Please select a Year.");
+      if (!hierDesignation || !hierStatus || !hierEmployeeIds.length || !hierMonth || !hierYear) return setError("Please fill all mandatory fields.");
     }
 
     setIsLoading(true); setTableVisible(false);
     try {
       let res;
       if (mode === "geographical") {
-        // GET /api/approvals/tour-program/geographical?districtIds=1,2&month=2&year=2026
         const p = new URLSearchParams({ month: geoMonth, year: geoYear });
         geoDistIds.forEach(id => p.append("districtIds", id));
         res = await api.get(`/api/approvals/tour-program/geographical?${p}`);
       } else {
-        // GET /api/approvals/tour-program/hierarchical?designationId=3&isActive=true&employeeIds=1,2&month=2&year=2026
-        const p = new URLSearchParams({
-          designationId: hierDesignation,
-          isActive:      hierStatus,
-          month:         hierMonth,
-          year:          hierYear,
-        });
+        const p = new URLSearchParams({ designationId: hierDesignation, isActive: hierStatus, month: hierMonth, year: hierYear });
         hierEmployeeIds.forEach(id => p.append("employeeIds", id));
         res = await api.get(`/api/approvals/tour-program/hierarchical?${p}`);
       }
@@ -210,8 +191,6 @@ export default function ApproveTourProgram() {
     } finally { setIsLoading(false); }
   };
 
-  // ── Approve row ───────────────────────────────────────────────────────────
-  // PUT /api/approvals/tour-program/approve/{tourProgramId}
   const handleApprove = async (row) => {
     const id = row.id || row.tourProgramId;
     if (!id) return;
@@ -220,49 +199,30 @@ export default function ApproveTourProgram() {
       await api.put(`/api/approvals/tour-program/approve/${id}`);
       setSuccessMsg("Tour program approved successfully!");
       setTimeout(() => setSuccessMsg(""), 3500);
-      // Refresh table data
-      await handleViewStatus();
-    } catch (err) {
-      setError(err.response?.data?.message || "Approve failed.");
-    } finally { setIsSubmitting(false); }
+      handleViewStatus();
+    } catch (err) { setError(err.response?.data?.message || "Approve failed."); }
+    finally { setIsSubmitting(false); }
   };
 
-  // ── Open reject popup ─────────────────────────────────────────────────────
-  const openRejectPopup = (row) => {
-    setRejectRow(row);
-    setRejectReason("");
-    setRejectPopup(true);
-  };
-
-  // ── Reject row ────────────────────────────────────────────────────────────
-  // PUT /api/approvals/tour-program/reject/{tourProgramId}
-  // body: { "rejectionMessage": "..." }
   const handleReject = async () => {
     if (!rejectReason.trim()) return;
     const id = rejectRow?.id || rejectRow?.tourProgramId;
     if (!id) return;
     setIsSubmitting(true); setError("");
     try {
-      await api.put(`/api/approvals/tour-program/reject/${id}`, {
-        rejectionMessage: rejectReason.trim()
-      });
+      await api.put(`/api/approvals/tour-program/reject/${id}`, { rejectionMessage: rejectReason.trim() });
       setRejectPopup(false); setRejectReason(""); setRejectRow(null);
       setSuccessMsg("Tour program rejected.");
       setTimeout(() => setSuccessMsg(""), 3500);
-      await handleViewStatus();
-    } catch (err) {
-      setError(err.response?.data?.message || "Reject failed.");
-      setRejectPopup(false);
-    } finally { setIsSubmitting(false); }
+      handleViewStatus();
+    } catch (err) { setError(err.response?.data?.message || "Reject failed."); setRejectPopup(false); }
+    finally { setIsSubmitting(false); }
   };
 
-  // ── Export ────────────────────────────────────────────────────────────────
   const handleExport = () => {
     if (!filteredData.length) return;
     const header = TABLE_COLS.map(c => c.label).join(",");
-    const rows   = filteredData.map(r =>
-      TABLE_COLS.map(c => `"${String(getVal(r, c.key)).replace(/"/g, '""')}"`).join(",")
-    ).join("\n");
+    const rows   = filteredData.map(r => TABLE_COLS.map(c => `"${String(getVal(r, c.key)).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([`${header}\n${rows}`], { type: "text/csv" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
@@ -270,7 +230,6 @@ export default function ApproveTourProgram() {
     URL.revokeObjectURL(url);
   };
 
-  // ── Pagination ────────────────────────────────────────────────────────────
   const filteredData = tableData.filter(row =>
     TABLE_COLS.some(c => String(getVal(row, c.key)).toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -278,288 +237,133 @@ export default function ApproveTourProgram() {
   const pagedData  = filteredData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const goToPage   = p => setCurrentPage(Math.min(Math.max(1, p), totalPages));
 
-  // ── Option arrays ─────────────────────────────────────────────────────────
-  const stateOpts = states.map(s       => ({ id: String(s.id), label: s.state_name || s.stateName }));
-  const distOpts  = districts.map(d    => ({ id: String(d.id), label: d.district_name || d.districtName }));
-  const desigOpts = designations.map(d => ({ value: String(d.id), label: d.name || d.designation_name }));
-  const empOpts   = employees.map(e    => ({ id: String(e.id), label: e.name || e.employee_name }));
+  // Options
+  const stateOpts = states.map(s => ({ id: String(s.id), label: s.state_name || s.stateName }));
+  const distOpts  = districts.map(d => ({ id: String(d.id), label: d.district_name || d.districtName }));
+  const desigOpts = designations.map(d => ({ id: String(d.id), label: d.name || d.designation_name }));
+  const empOpts   = employees.map(e => ({ id: String(e.id), label: e.name || e.employee_name }));
 
-  // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5 animate-in fade-in duration-400 pb-12">
+    <div className="ucr-wrap">
+      <style>{STYLES}</style>
 
-      {/* ══ FILTER CARD ════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="h-1 bg-gradient-to-r from-blue-600 via-blue-400 to-sky-400 rounded-t-xl" />
+      {error && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 16px", color: "#dc2626", fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+      {successMsg && (
+        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "10px 16px", color: "#16a34a", fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <CheckCircle2 size={16} /> {successMsg}
+        </div>
+      )}
 
-        {/* Header */}
-        <div className={`px-6 sm:px-8 pt-5 pb-4 flex items-center justify-between
-          ${filterOpen ? "border-b border-gray-100" : ""}`}>
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-              <SlidersHorizontal size={18} className="text-blue-600" />
-            </div>
-            <h2 className="text-base font-bold text-gray-800">Approve Tour Program</h2>
+      <div className="ucr-card">
+        <div className="ucr-header">
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "#eff6ff", border: "1px solid #dbeafe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <SlidersHorizontal size={17} style={{ color: "#2563eb" }} />
           </div>
-          {/* Filter toggle */}
-          <button onClick={() => setFilterOpen(p => !p)}
-            className="flex items-center gap-2 group" title="Toggle filter">
-            <span className="text-sm font-semibold text-gray-500 group-hover:text-gray-700 transition-colors">
-              Filter
-            </span>
-            <div className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-all duration-300
-              ${filterOpen ? "bg-blue-500 justify-end" : "bg-gray-300 justify-start"}`}>
-              <div className="w-5 h-5 bg-white rounded-full shadow-md" />
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0 }}>Approve Tour Program</h2>
+            <p style={{ fontSize: 11, color: "#6b7280", margin: 0, marginTop: 2 }}>Review and manage employee tour program approvals</p>
+          </div>
+          <div onClick={() => setFilterOpen(!filterOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Filter</span>
+            <div style={{ width: 34, height: 18, borderRadius: 20, background: filterOpen ? "#2563eb" : "#d1d5db", position: "relative", transition: "all 0.2s" }}>
+              <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: filterOpen ? 19 : 3, transition: "all 0.2s" }} />
             </div>
-          </button>
+          </div>
         </div>
 
         {filterOpen && (
-          <div className="px-6 sm:px-8 py-6 pb-8 space-y-5">
-
-            {/* Radio */}
-            <div className="flex items-center gap-8">
+          <div className="ucr-body">
+            <div className="ucr-gender-row">
+              <p style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.07em", margin: 0, marginRight: 8 }}>Selection Mode:</p>
               {[
                 { value: "geographical", label: "Geographical" },
                 { value: "hierarchical", label: "Hierarchical" },
               ].map(opt => (
-                <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer group">
-                  <div className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center
-                    transition-all flex-shrink-0
-                    ${mode === opt.value ? "border-blue-500" : "border-gray-300 group-hover:border-blue-300"}`}>
-                    {mode === opt.value && <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />}
+                <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <div style={{ width: 16, height: 16, borderRadius: "50%", border: mode === opt.value ? "2px solid #2563eb" : "2px solid #d1d5db", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {mode === opt.value && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#2563eb" }} />}
                   </div>
-                  <input type="radio" className="sr-only" value={opt.value}
-                    checked={mode === opt.value} onChange={() => setMode(opt.value)} />
-                  <span className={`text-sm font-semibold transition-colors
-                    ${mode === opt.value ? "text-gray-800" : "text-gray-500 group-hover:text-gray-700"}`}>
-                    {opt.label}
-                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: mode === opt.value ? "#111827" : "#6b7280" }}>{opt.label}</span>
+                  <input type="radio" checked={mode === opt.value} onChange={() => setMode(opt.value)} style={{ display: "none" }} />
                 </label>
               ))}
             </div>
 
-            {/* Alert */}
-            {error && (
-              <div className="flex items-start gap-2.5 bg-red-50 text-red-600 px-4 py-3 rounded-lg border border-red-100 text-sm">
-                <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {error}
-              </div>
-            )}
-            {successMsg && (
-              <div className="flex items-center gap-2.5 bg-emerald-50 text-emerald-700 px-4 py-3 rounded-lg border border-emerald-100 text-sm">
-                <Check size={15} className="flex-shrink-0" /> {successMsg}
-              </div>
-            )}
+            <div className="ucr-grid">
+              {mode === "geographical" ? (
+                <>
+                  <MultiSelectDropdown label="Select State *" options={stateOpts} selectedIds={geoStateIds} onChange={setGeoStateIds} icon={MapPin} />
+                  <MultiSelectDropdown label="Select District *" options={distOpts} selectedIds={geoDistIds} onChange={setGeoDistIds} disabled={!geoStateIds.length} icon={MapPin} />
+                  <FSelect label="Select Month *" value={geoMonth} onChange={(e) => setGeoMonth(e.target.value)} options={MONTHS.map(m => ({ id: m.value, label: m.label }))} icon={Calendar} />
+                  <FSelect label="Select Year *" value={geoYear} onChange={(e) => setGeoYear(e.target.value)} options={YEARS.map(y => ({ id: y, label: String(y) }))} icon={Calendar} />
+                </>
+              ) : (
+                <>
+                  <FSelect label="Designation *" value={hierDesignation} onChange={(e) => { setHierDesignation(e.target.value); setHierStatus(""); setHierEmployeeIds([]); }} options={desigOpts} icon={Briefcase} />
+                  <FSelect label="Status *" value={hierStatus} onChange={(e) => setHierStatus(e.target.value)} disabled={!hierDesignation} options={[{ id: "true", label: "Active" }, { id: "false", label: "Inactive" }]} icon={ToggleRight} />
+                  <MultiSelectDropdown label="Select Employee *" options={empOpts} selectedIds={hierEmployeeIds} onChange={setHierEmployeeIds} disabled={!hierDesignation || !hierStatus} icon={User} />
+                  <FSelect label="Month *" value={hierMonth} onChange={(e) => setHierMonth(e.target.value)} options={MONTHS.map(m => ({ id: m.value, label: m.label }))} icon={Calendar} />
+                  <FSelect label="Year *" value={hierYear} onChange={(e) => setHierYear(e.target.value)} options={YEARS.map(y => ({ id: y, label: String(y) }))} icon={Calendar} />
+                </>
+              )}
+            </div>
 
-            {/* ════════ GEOGRAPHICAL ════════
-                Fields: State(multi) | District(multi) | Month | Year | ViewStatus
-            ════════════════════════════════ */}
-            {mode === "geographical" && (
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                  {/* State — multi */}
-                  <MultiDropdown
-                    label="SELECT STATE *"
-                    icon={MapPin}
-                    options={stateOpts}
-                    selectedIds={geoStateIds}
-                    onChange={setGeoStateIds}
-                  />
-                  {/* District — multi (loads after state selected) */}
-                  <MultiDropdown
-                    label="SELECT DISTRICT *"
-                    icon={MapPin}
-                    options={distOpts}
-                    selectedIds={geoDistIds}
-                    onChange={setGeoDistIds}
-                    disabled={!geoStateIds.length}
-                  />
-                  {/* Month */}
-                  <Dropdown
-                    label="SELECT MONTH *"
-                    value={geoMonth}
-                    onSelect={setGeoMonth}
-                    options={MONTHS.map(m => ({ value: m.value, label: m.label }))}
-                    icon={Calendar}
-                  />
-                  {/* Year */}
-                  <Dropdown
-                    label="SELECT YEAR *"
-                    value={geoYear}
-                    onSelect={setGeoYear}
-                    options={YEARS.map(y => ({ value: y, label: String(y) }))}
-                    icon={Calendar}
-                  />
-                </div>
-                <div className="flex justify-start">
-                  <div className="w-full lg:w-1/4">
-                    <ViewStatusBtn onClick={handleViewStatus} loading={isLoading} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ════════ HIERARCHICAL ════════
-                Row 1: Designation(one) | Status(one) | Employee(multi) | Month
-                Row 2: Year | ViewStatus
-            ════════════════════════════════ */}
-            {mode === "hierarchical" && (
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                  {/* Designation — single */}
-                  <Dropdown
-                    label="SELECT DESIGNATION *"
-                    value={hierDesignation}
-                    onSelect={v => { setHierDesignation(v); setHierStatus(""); setHierEmployeeIds([]); }}
-                    options={desigOpts}
-                    icon={Briefcase}
-                  />
-                  {/* Status (isActive) — single */}
-                  <Dropdown
-                    label="SELECT STATUS *"
-                    value={hierStatus}
-                    onSelect={setHierStatus}
-                    options={[
-                      { value: "true",  label: "Active"   },
-                      { value: "false", label: "Inactive" },
-                    ]}
-                    icon={ToggleRight}
-                    disabled={!hierDesignation}
-                  />
-                  {/* Employee — multi (loads after designation + status) */}
-                  <MultiDropdown
-                    label="SELECT EMPLOYEE *"
-                    icon={User}
-                    options={empOpts}
-                    selectedIds={hierEmployeeIds}
-                    onChange={setHierEmployeeIds}
-                    disabled={!hierDesignation || !hierStatus}
-                  />
-                  {/* Month */}
-                  <Dropdown
-                    label="SELECT MONTH *"
-                    value={hierMonth}
-                    onSelect={setHierMonth}
-                    options={MONTHS.map(m => ({ value: m.value, label: m.label }))}
-                    icon={Calendar}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
-                  {/* Year */}
-                  <Dropdown
-                    label="SELECT YEAR *"
-                    value={hierYear}
-                    onSelect={setHierYear}
-                    options={YEARS.map(y => ({ value: y, label: String(y) }))}
-                    icon={Calendar}
-                  />
-                  <ViewStatusBtn onClick={handleViewStatus} loading={isLoading} />
-                </div>
-              </div>
-            )}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={handleViewStatus} disabled={isLoading} className="ucr-submit-btn" style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 24px", borderRadius: 9, fontSize: 13, fontWeight: 700, border: "none", cursor: isLoading ? "not-allowed" : "pointer", background: "#2563eb", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.25)", opacity: isLoading ? 0.6 : 1 }}>
+                {isLoading ? <Loader2 size={14} style={{ animation: "ucr-spin 1s linear infinite" }} /> : <Search size={14} />}
+                View Status
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* ══ TABLE ════════════════════════════════════════════════════ */}
       {tableVisible && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100
-          animate-in slide-in-from-bottom-2 duration-300">
-          <div className="h-1 bg-gradient-to-r from-blue-600 via-blue-400 to-sky-400 rounded-t-xl" />
-
-          <div className="px-6 sm:px-8 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-gray-800">Tour Program Detail</h3>
-            <span className="text-xs font-semibold bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full">
-              {filteredData.length} record{filteredData.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-
-          <div className="px-6 sm:px-8 py-5 space-y-4">
-            {/* Search + Export */}
-            <div className="flex items-center justify-between gap-4">
-              <div className="relative w-56">
-                <input type="text" placeholder="Search…" value={searchQuery}
-                  onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="w-full border-2 border-gray-300 focus:border-blue-500 rounded-lg
-                    pl-4 pr-9 py-[9px] text-sm text-gray-800 placeholder-gray-400
-                    focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all" />
-                <Search size={15} className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" />
+        <div className="ucr-card">
+          <div className="ucr-header">
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: "#111827", flex: 1, margin: 0 }}>Tour Program Details</h3>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{ position: "relative" }}>
+                <input type="text" placeholder="Search..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }} style={{ height: 32, padding: "0 32px 0 12px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 8, width: 180, outline: "none" }} />
+                <Search size={14} style={{ position: "absolute", right: 10, top: 9, color: "#9ca3af" }} />
               </div>
-              <button onClick={handleExport} title="Export to CSV"
-                className="w-9 h-9 flex items-center justify-center rounded-lg
-                  bg-green-600 hover:bg-green-700 text-white transition-all active:scale-95 shadow-sm">
-                <FileSpreadsheet size={17} />
+              <button onClick={handleExport} style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }} title="Export to CSV">
+                <FileSpreadsheet size={16} />
               </button>
             </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="w-full text-sm text-left" style={{ minWidth: 1200 }}>
-                <thead className="bg-blue-600 text-white text-xs uppercase tracking-wider">
+          </div>
+          <div className="ucr-body" style={{ padding: 0 }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead style={{ background: "#f9fafb", borderBottom: "1px solid #f3f4f6" }}>
                   <tr>
-                    <th className="py-3.5 px-4 font-semibold whitespace-nowrap">#</th>
-                    {TABLE_COLS.map(c => (
-                      <th key={c.key} className="py-3.5 px-4 font-semibold whitespace-nowrap">{c.label}</th>
-                    ))}
-                    <th className="py-3.5 px-4 font-semibold whitespace-nowrap text-center">Actions</th>
+                    <th style={{ padding: "12px 16px", textAlign: "left", color: "#6b7280", fontWeight: 700 }}>#</th>
+                    {TABLE_COLS.map(col => <th key={col.key} style={{ padding: "12px 16px", textAlign: "left", color: "#6b7280", fontWeight: 700 }}>{col.label}</th>)}
+                    <th style={{ padding: "12px 16px", textAlign: "center", color: "#6b7280", fontWeight: 700 }}>ACTIONS</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {isLoading ? (
-                    <tr><td colSpan={TABLE_COLS.length + 2} className="py-14 text-center">
-                      <Loader2 className="animate-spin inline-block text-blue-500" size={28} />
-                    </td></tr>
-                  ) : pagedData.length === 0 ? (
-                    <tr><td colSpan={TABLE_COLS.length + 2} className="py-14 text-center text-gray-400 text-sm">
-                      No records found.
-                    </td></tr>
-                  ) : pagedData.map((row, i) => (
-                    <tr key={row.id || i}
-                      className={`transition-colors hover:bg-blue-50/20 ${i % 2 !== 0 ? "bg-gray-50/40" : "bg-white"}`}>
-                      <td className="py-3.5 px-4 text-gray-500 text-xs">
-                        {(currentPage - 1) * PAGE_SIZE + i + 1}
-                      </td>
-                      {TABLE_COLS.map(c => {
-                        const val = getVal(row, c.key);
+                <tbody style={{ background: "#fff" }}>
+                  {pagedData.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={{ padding: "12px 16px", color: "#6b7280" }}>{(currentPage - 1) * PAGE_SIZE + i + 1}</td>
+                      {TABLE_COLS.map(col => {
+                        const val = getVal(row, col.key);
                         return (
-                          <td key={c.key} className="py-3.5 px-4 text-gray-700 whitespace-nowrap">
-                            {c.key === "approved"
-                              ? <span className={`text-xs font-bold px-2 py-0.5 rounded-full
-                                  ${val === "Yes"
-                                    ? "bg-blue-50 text-blue-600 border border-blue-200"
-                                    : "bg-gray-100 text-gray-500"}`}>{val}</span>
-                              : c.key === "submitted"
-                                ? <span className="font-semibold text-gray-800">{val}</span>
-                                : val}
+                          <td key={col.key} style={{ padding: "12px 16px", color: "#374151", whiteSpace: "nowrap" }}>
+                            {col.key === "approved" ? (
+                              <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: val === "Yes" ? "#f0fdf4" : "#f9fafb", color: val === "Yes" ? "#16a34a" : "#6b7280", border: `1px solid ${val === "Yes" ? "#bbf7d0" : "#f3f4f6"}` }}>{val}</span>
+                            ) : val}
                           </td>
                         );
                       })}
-                      {/* Approve / Reject actions per row */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleApprove(row)}
-                            disabled={isSubmitting || getVal(row, "approved") === "Yes"}
-                            title="Approve"
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold
-                              transition-all active:scale-95
-                              ${getVal(row, "approved") === "Yes"
-                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"}`}
-                          >
-                            {isSubmitting ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => openRejectPopup(row)}
-                            disabled={isSubmitting}
-                            title="Reject"
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold
-                              bg-gray-700 hover:bg-gray-800 text-white shadow-sm transition-all active:scale-95
-                              disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <X size={11} /> Reject
-                          </button>
+                      <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                          <button onClick={() => handleApprove(row)} disabled={isSubmitting || getVal(row, "approved") === "Yes"} style={{ background: "#2563eb", color: "#fff", border: "none", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", opacity: (isSubmitting || getVal(row, "approved") === "Yes") ? 0.5 : 1 }}>Approve</button>
+                          <button onClick={() => { setRejectRow(row); setRejectPopup(true); }} disabled={isSubmitting} style={{ background: "#374151", color: "#fff", border: "none", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Reject</button>
                         </div>
                       </td>
                     </tr>
@@ -567,64 +371,28 @@ export default function ApproveTourProgram() {
                 </tbody>
               </table>
             </div>
-
-            {/* Pagination */}
-            <div className="flex items-center justify-center gap-2 pt-2 flex-wrap">
-              <PaginationBtn label="First"    icon={<ChevronsLeft  size={14} />}           onClick={() => goToPage(1)}               disabled={currentPage === 1} />
-              <PaginationBtn label="Previous" icon={<ChevronLeft   size={14} />}           onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} />
-              <span className="text-sm font-semibold px-4 py-2 rounded-lg bg-blue-50 text-blue-700">
-                Page {currentPage} of {totalPages}
-              </span>
-              <PaginationBtn label="Next" iconRight icon={<ChevronRight  size={14} />} onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} />
-              <PaginationBtn label="Last" iconRight icon={<ChevronsRight size={14} />} onClick={() => goToPage(totalPages)}       disabled={currentPage === totalPages} />
+            <div className="ucr-footer">
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => goToPage(1)} disabled={currentPage === 1} style={pagBtnStyle}>First</button>
+                <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} style={pagBtnStyle}><ChevronLeft size={14}/></button>
+                <span style={{ padding: "0 12px", display: "flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#2563eb" }}>Page {currentPage} of {totalPages}</span>
+                <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} style={pagBtnStyle}><ChevronRight size={14}/></button>
+                <button onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages} style={pagBtnStyle}>Last</button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══ REJECT POPUP ════════════════════════════════════════════ */}
       {rejectPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40
-          backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden
-            animate-in zoom-in-95 duration-150">
-            <div className="px-6 pt-6 pb-3 text-center border-b border-gray-100">
-              <div className="w-11 h-11 rounded-full bg-red-50 border-2 border-red-100
-                flex items-center justify-center mx-auto mb-3">
-                <X size={20} className="text-red-500" />
-              </div>
-              <h3 className="text-base font-bold text-gray-800">Rejection Message</h3>
-              <p className="text-xs text-gray-500 mt-1">Provide a reason for rejection.</p>
-            </div>
-            <div className="px-6 py-5">
-              <textarea
-                rows={5}
-                placeholder="Type reason here…"
-                value={rejectReason}
-                onChange={e => setRejectReason(e.target.value)}
-                className="w-full rounded-lg border-2 border-gray-300 focus:border-blue-500
-                  focus:ring-2 focus:ring-blue-100 px-4 py-3 text-sm text-gray-800
-                  placeholder-gray-400 resize-none focus:outline-none transition-all"
-              />
-            </div>
-            <div className="flex items-center justify-center gap-3 px-6 pb-6">
-              <button
-                onClick={handleReject}
-                disabled={!rejectReason.trim() || isSubmitting}
-                className="flex items-center gap-2 px-8 py-2.5 rounded-lg bg-blue-600
-                  hover:bg-blue-700 text-white text-sm font-bold transition-all active:scale-95
-                  disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-blue-200"
-              >
-                {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-                OK
-              </button>
-              <button
-                onClick={() => { setRejectPopup(false); setRejectReason(""); setRejectRow(null); }}
-                className="px-8 py-2.5 rounded-lg border-2 border-gray-300 text-gray-600
-                  hover:border-gray-400 text-sm font-bold transition-all active:scale-95"
-              >
-                Cancel
-              </button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, width: 400, padding: 24 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Reject Tour Program</h3>
+            <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>Provide a reason for rejection.</p>
+            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Type reason here..." style={{ width: "100%", height: 100, borderRadius: 8, border: "1px solid #d1d5db", padding: 12, fontSize: 13, outline: "none", marginBottom: 20 }} />
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button onClick={() => setRejectPopup(false)} style={{ padding: "8px 16px", border: "1px solid #d1d5db", borderRadius: 8, background: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleReject} disabled={!rejectReason.trim() || isSubmitting} style={{ padding: "8px 24px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: (!rejectReason.trim() || isSubmitting) ? 0.6 : 1 }}>OK</button>
             </div>
           </div>
         </div>
@@ -633,258 +401,108 @@ export default function ApproveTourProgram() {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// Dropdown — single select, portal-positioned list
-// ═══════════════════════════════════════════════════════════════════
-function Dropdown({ label, value, onSelect, options = [], icon: Icon, disabled }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [pos,    setPos]    = useState({ top: 0, left: 0, width: 0 });
+const pagBtnStyle = { background: "#fff", border: "1px solid #f3f4f6", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" };
+
+// ─── Reference Style Dropdowns ──────────────────────────────────────────────
+function FSelect({ label, value, onChange, disabled, options = [], icon: Icon }) {
+  const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  const openMenu = () => {
-    if (disabled) return;
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
-    setIsOpen(true);
-  };
-
   useEffect(() => {
-    if (!isOpen) return;
-    const close = () => setIsOpen(false);
-    document.addEventListener("mousedown", close);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      document.removeEventListener("mousedown", close);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, [isOpen]);
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
 
-  const selected = options.find(o => String(o.value) === String(value));
-  const hasValue = Boolean(value !== "" && value !== null && value !== undefined);
-  const canOpen  = !disabled;
-
-  const borderCls = disabled
-    ? "border-gray-200 bg-gray-50"
-    : hasValue
-      ? isOpen ? "border-blue-500 ring-2 ring-blue-100" : "border-blue-400"
-      : isOpen ? "border-gray-400 ring-2 ring-gray-100" : "border-gray-300";
-
-  const labelColor = disabled ? "text-gray-300"
-    : hasValue ? "text-blue-500"
-    : isOpen   ? "text-gray-500"
-    : "text-gray-400";
-
-  const labelPos = hasValue || isOpen ? "-top-2.5 text-[11px]" : "top-[14px] text-sm";
+  const selected = options.find(o => String(o.id) === String(value));
+  const hasVal = Boolean(value);
+  const active = open || hasVal;
+  const borderColor = (open || (hasVal && !disabled)) ? "#2563eb" : "#d1d5db";
 
   return (
-    <div className="relative w-full">
-      <div ref={ref} onClick={openMenu}
-        className={`w-full ${H} rounded-lg border-2 bg-white pl-4 pr-10
-          flex items-center transition-all
-          ${canOpen ? "cursor-pointer" : "cursor-not-allowed"} ${borderCls}`}>
-        <span className={`truncate text-sm font-medium flex-1 ${hasValue ? "text-gray-900" : "text-transparent"}`}>
+    <div ref={ref} style={{ position: "relative", width: "100%", userSelect: "none" }}>
+      <div onClick={() => !disabled && setOpen(!open)}
+        style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 34px 0 12px", fontSize: 13, display: "flex", alignItems: "center",
+          cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#f9fafb" : "#fff",
+          border: `1.5px solid ${disabled ? "#d1d5db" : borderColor}`, transition: "all 0.15s", boxSizing: "border-box",
+        }}>
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: hasVal ? (disabled ? "#9ca3af" : "#111827") : "transparent" }}>
           {selected?.label || " "}
         </span>
-        <div className={`absolute right-3 flex items-center gap-1 pointer-events-none
-          ${hasValue ? "text-blue-400" : disabled ? "text-gray-300" : "text-gray-400"}`}>
-          {Icon && <Icon size={14} className="opacity-70" />}
-          <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        <div style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: open ? "#2563eb" : "#9ca3af", display: "flex", alignItems: "center", gap: 4 }}>
+          {Icon && <Icon size={14} />}
+          <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }} />
         </div>
       </div>
-      <label className={`absolute left-3 px-1 bg-white pointer-events-none z-10
-        transition-all duration-200 font-semibold ${labelPos} ${labelColor}`}>
-        {label}
-      </label>
-
-      {isOpen && (
-        <Portal top={pos.top} left={pos.left} width={pos.width} onClose={() => setIsOpen(false)}>
-          {options.length === 0
-            ? <div className="px-4 py-3 text-sm text-gray-400 italic text-center">No options available</div>
-            : <ul className="py-1.5 max-h-60 overflow-y-auto">
-                {options.map((opt, i) => (
-                  <li key={i}
-                    onMouseDown={e => { e.preventDefault(); onSelect(opt.value); setIsOpen(false); }}
-                    className={`px-4 py-3 text-sm cursor-pointer font-medium transition-colors
-                      ${String(value) === String(opt.value)
-                        ? "bg-blue-50 text-blue-600 font-semibold border-l-[3px] border-blue-500"
-                        : "text-gray-700 hover:bg-blue-500 hover:text-white border-l-[3px] border-transparent"
-                      }`}>
-                    {opt.label}
-                  </li>
-                ))}
-              </ul>
-          }
-        </Portal>
+      <label style={{
+        position: "absolute", left: 10, pointerEvents: "none", zIndex: 11, transition: "all 0.15s", fontWeight: 600,
+        top: active ? -9 : 10, fontSize: active ? 10 : 12, color: (open || (hasVal && !disabled)) ? "#2563eb" : "#9ca3af",
+        background: active ? "#fff" : "transparent", padding: active ? "0 4px" : "0",
+      }}>{label}</label>
+      {open && !disabled && (
+        <div style={{ position: "absolute", top: "calc(100% + 5px)", left: 0, width: "100%", background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 200, overflow: "hidden" }}>
+          <ul style={{ maxHeight: 200, overflowY: "auto", padding: "4px 0", margin: 0, listStyle: "none" }}>
+            {options.map(opt => (
+              <li key={opt.id} onMouseDown={() => { onChange({ target: { value: String(opt.id) } }); setOpen(false); }}
+                style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", background: String(value) === String(opt.id) ? "#eff6ff" : "transparent", color: String(value) === String(opt.id) ? "#2563eb" : "#374151", fontWeight: String(value) === String(opt.id) ? 600 : 400 }}>{opt.label}</li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// MultiDropdown — multi select, portal-positioned list
-// ═══════════════════════════════════════════════════════════════════
-function MultiDropdown({ label, options = [], selectedIds, onChange, icon: Icon, disabled }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [pos,    setPos]    = useState({ top: 0, left: 0, width: 0 });
+function MultiSelectDropdown({ label, options, selectedIds, onChange, icon: Icon, disabled }) {
+  const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  const openMenu = () => {
-    if (disabled) return;
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
-    setIsOpen(true);
-  };
-
   useEffect(() => {
-    if (!isOpen) return;
-    const close = () => setIsOpen(false);
-    document.addEventListener("mousedown", close);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      document.removeEventListener("mousedown", close);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, [isOpen]);
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
 
-  const toggle    = id => onChange(selectedIds.includes(id) ? selectedIds.filter(i => i !== id) : [...selectedIds, id]);
-  const selectAll = ()  => onChange(options.map(o => o.id));
-  const clearAll  = ()  => onChange([]);
-
-  const hasValue    = selectedIds.length > 0;
-  const displayText = hasValue
-    ? options.filter(o => selectedIds.includes(o.id)).map(o => o.label).join(", ")
-    : "";
-
-  const borderCls = disabled
-    ? "border-gray-200 bg-gray-50"
-    : hasValue
-      ? isOpen ? "border-blue-500 ring-2 ring-blue-100" : "border-blue-400"
-      : isOpen ? "border-gray-400 ring-2 ring-gray-100" : "border-gray-300";
-
-  const labelColor = disabled ? "text-gray-300"
-    : hasValue ? "text-blue-500"
-    : isOpen   ? "text-gray-500"
-    : "text-gray-400";
-
-  const labelPos = hasValue || isOpen ? "-top-2.5 text-[11px]" : "top-[14px] text-sm";
+  const hasVal = selectedIds.length > 0;
+  const active = open || hasVal;
+  const displayVal = hasVal ? options.filter(o => selectedIds.includes(o.id)).map(o => o.label).join(", ") : "";
 
   return (
-    <div className="relative w-full">
-      <div ref={ref} onClick={openMenu}
-        className={`w-full ${H} rounded-lg border-2 bg-white pl-4 pr-10
-          flex items-center transition-all
-          ${disabled ? "cursor-not-allowed" : "cursor-pointer"} ${borderCls}`}>
-        <span className={`block truncate text-sm font-medium flex-1 min-w-0
-          ${hasValue ? "text-gray-900" : "text-transparent"}`}>
-          {displayText || " "}
-        </span>
-        <div className={`absolute right-3 flex items-center gap-1 pointer-events-none
-          ${hasValue ? "text-blue-400" : disabled ? "text-gray-300" : "text-gray-400"}`}>
-          {Icon && <Icon size={14} className="opacity-70" />}
-          <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+    <div ref={ref} style={{ position: "relative", width: "100%", userSelect: "none" }}>
+      <div onClick={() => !disabled && setOpen(!open)}
+        style={{
+          width: "100%", height: FH, borderRadius: 8, padding: "0 34px 0 12px", fontSize: 13, display: "flex", alignItems: "center",
+          cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#f9fafb" : "#fff", border: `1.5px solid ${open || hasVal ? "#2563eb" : "#d1d5db"}`, transition: "all 0.15s", boxSizing: "border-box",
+        }}>
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: hasVal ? "#111827" : "transparent" }}>{displayVal}</span>
+        <div style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: open ? "#2563eb" : "#9ca3af", display: "flex", alignItems: "center", gap: 4 }}>
+          {Icon && <Icon size={14} />}
+          <ChevronDown size={14} />
         </div>
       </div>
-      <label className={`absolute left-3 px-1 bg-white pointer-events-none z-10
-        transition-all duration-200 font-semibold ${labelPos} ${labelColor}`}>
-        {label}
-      </label>
-
-      {isOpen && !disabled && (
-        <Portal top={pos.top} left={pos.left} width={pos.width} onClose={() => setIsOpen(false)}>
-          <div className="flex border-b border-gray-100">
-            <button type="button" onMouseDown={e => { e.preventDefault(); selectAll(); }}
-              className="flex-1 py-2 text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors">
-              Select All
-            </button>
-            <button type="button" onMouseDown={e => { e.preventDefault(); clearAll(); }}
-              className="flex-1 py-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">
-              Clear All
-            </button>
+      <label style={{
+        position: "absolute", left: 10, pointerEvents: "none", zIndex: 11, transition: "all 0.15s", fontWeight: 600,
+        top: active ? -9 : 10, fontSize: active ? 10 : 12, color: (open || hasVal) ? "#2563eb" : "#9ca3af",
+        background: active ? "#fff" : "transparent", padding: active ? "0 4px" : "0",
+      }}>{label}</label>
+      {open && !disabled && (
+        <div style={{ position: "absolute", top: "calc(100% + 5px)", left: 0, width: "100%", background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 200, overflow: "hidden" }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #f3f4f6" }}>
+            <button style={{ flex: 1, padding: "8px", fontSize: 11, fontWeight: 700, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }} onMouseDown={(e) => { e.preventDefault(); onChange(options.map(o => o.id)); }}>Select All</button>
+            <button style={{ flex: 1, padding: "8px", fontSize: 11, fontWeight: 700, background: "#ef4444", color: "#fff", border: "none", cursor: "pointer" }} onMouseDown={(e) => { e.preventDefault(); onChange([]); }}>Clear</button>
           </div>
-          {options.length === 0
-            ? <div className="px-4 py-3 text-sm text-gray-400 italic text-center">No options available</div>
-            : <ul className="py-1.5 max-h-52 overflow-y-auto">
-                {options.map((opt, idx) => {
-                  const isSel = selectedIds.includes(opt.id);
-                  return (
-                    <li key={opt.id ?? idx}
-                      onMouseDown={e => { e.preventDefault(); toggle(opt.id); }}
-                      className={`px-4 py-2.5 text-sm cursor-pointer flex items-center gap-3 transition-colors
-                        ${isSel ? "bg-blue-50" : "hover:bg-gray-50"}`}>
-                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0
-                        transition-all ${isSel ? "border-blue-500 bg-blue-500" : "border-gray-300"}`}>
-                        {isSel && (
-                          <svg viewBox="0 0 10 8" className="w-2.5 h-2" fill="none">
-                            <path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        )}
-                      </div>
-                      <span className={`font-medium ${isSel ? "text-blue-600" : "text-gray-700"}`}>{opt.label}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-          }
-        </Portal>
+          <ul style={{ maxHeight: 200, overflowY: "auto", padding: "4px 0", margin: 0, listStyle: "none" }}>
+            {options.map(opt => (
+              <li key={opt.id} onMouseDown={(e) => { e.preventDefault(); onChange(selectedIds.includes(opt.id) ? selectedIds.filter(i => i !== opt.id) : [...selectedIds, opt.id]); }}
+                style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="checkbox" checked={selectedIds.includes(opt.id)} readOnly />
+                <span style={{ color: selectedIds.includes(opt.id) ? "#2563eb" : "#374151", fontWeight: selectedIds.includes(opt.id) ? 600 : 400 }}>{opt.label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// Portal — fixed-positioned, escapes all overflow clipping
-// ═══════════════════════════════════════════════════════════════════
-function Portal({ top, left, width, onClose, children }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const h = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-      document.addEventListener("mousedown", h);
-      return () => document.removeEventListener("mousedown", h);
-    }, 10);
-    return () => clearTimeout(t);
-  }, [onClose]);
-
-  return (
-    <div ref={ref}
-      style={{ position: "fixed", top, left, width, zIndex: 9999 }}
-      className="bg-white border border-gray-200 rounded-lg shadow-2xl overflow-hidden
-        animate-in fade-in zoom-in-95 duration-100">
-      {children}
-    </div>
-  );
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function ViewStatusBtn({ onClick, loading }) {
-  return (
-    <button type="button" onClick={onClick} disabled={loading}
-      className={`w-full ${H} flex items-center justify-center gap-2 px-6 rounded-lg
-        bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold
-        transition-all active:scale-95 shadow-sm shadow-blue-200
-        disabled:opacity-60 disabled:cursor-not-allowed`}>
-      {loading
-        ? <Loader2 size={15} className="animate-spin" />
-        : <span className="text-base font-bold leading-none">✓</span>}
-      View Status
-    </button>
-  );
-}
-
-function PaginationBtn({ label, icon, iconRight, onClick, disabled }) {
-  return (
-    <button onClick={onClick} disabled={disabled}
-      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold
-        border-2 transition-all active:scale-95
-        ${disabled
-          ? "border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed"
-          : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-400"
-        }`}>
-      {!iconRight && icon}{label}{iconRight && icon}
-    </button>
   );
 }

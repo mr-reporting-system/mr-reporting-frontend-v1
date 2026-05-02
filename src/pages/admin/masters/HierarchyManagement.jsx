@@ -264,6 +264,7 @@ export default function HierarchyManagement() {
         
         {/* ── TOP HEADER & FILTER TOGGLE ── */}
         <div className="flex justify-between items-center mb-6 border-b pb-4">
+          
           <h2 className="text-lg font-bold text-gray-800">Hierarchy Management</h2>
           
           <div className="flex items-center gap-2">
